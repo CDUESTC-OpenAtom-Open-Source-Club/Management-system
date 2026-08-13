@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: openatom-club-secretary
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/openatom_club
+    username: openatom
+    password: openatom123
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  h2:
+    console:
+      enabled: false
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: public
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+app:
+  storage:
+    root: ./data/openatom-storage
+  auth:
+    jwt-secret: "OpenAtomClubSecretarySystemJwtKey2024!"
+    jwt-expire-hours: 168
+
+server:
+  port: 8080
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+logging:
+  level:
+    com.openatom.club: DEBUG
+    org.flywaydb: INFO

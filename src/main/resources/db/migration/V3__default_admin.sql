@@ -1,0 +1,3 @@
+-- V3: 默认账号初始化（由应用启动时的 DefaultAdminInitializer 负责实际创建）
+-- 该迁移保留为占位，避免 Flyway 版本缺失。
+-- 默认账号的创建逻辑在 Java 初始化器中执行，以确保密码使用 BCrypt 加密。

@@ -1,0 +1,23 @@
+name: openatom-club
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: openatom-club-postgres
+    environment:
+      POSTGRES_DB: openatom_club
+      POSTGRES_USER: openatom
+      POSTGRES_PASSWORD: openatom123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openatom -d openatom_club"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

@@ -1,0 +1,14 @@
+.mvn/
+target/
+*.class
+*.jar
+*.war
+*.ear
+data/
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+*.log
+.idea/
+*.iml
+.DS_Store
