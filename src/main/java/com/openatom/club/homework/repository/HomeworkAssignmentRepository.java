@@ -12,8 +12,15 @@ public interface HomeworkAssignmentRepository extends JpaRepository<HomeworkAssi
 
     Optional<HomeworkAssignment> findByIdAndDeletedAtIsNull(Long id);
 
+    long countByCohortId(Long cohortId);
+
     @Query("SELECT h FROM HomeworkAssignment h WHERE h.deletedAt IS NULL " +
            "AND (:status IS NULL OR h.status = :status) " +
+           "AND (:cohortId IS NULL OR h.cohortId = :cohortId) " +
+           "AND (:department IS NULL OR h.targetDepartment = :department) " +
            "ORDER BY h.createdAt DESC")
-    Page<HomeworkAssignment> findAllWithFilters(@Param("status") String status, Pageable pageable);
+    Page<HomeworkAssignment> findAllWithFilters(@Param("status") String status,
+                                                 @Param("cohortId") Long cohortId,
+                                                 @Param("department") String department,
+                                                 Pageable pageable);
 }

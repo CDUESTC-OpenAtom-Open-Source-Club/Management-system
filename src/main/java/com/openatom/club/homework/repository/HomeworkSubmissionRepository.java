@@ -17,6 +17,8 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
 
     List<HomeworkSubmission> findAllByHomeworkIdAndDeletedAtIsNull(Long homeworkId);
 
+    List<HomeworkSubmission> findAllByMemberIdInAndDeletedAtIsNull(List<Long> memberIds);
+
     @Query("SELECT s FROM HomeworkSubmission s WHERE s.homeworkId = :homeworkId AND s.deletedAt IS NULL " +
            "AND (:status IS NULL OR s.status = :status)")
     Page<HomeworkSubmission> findByHomeworkIdWithStatus(@Param("homeworkId") Long homeworkId,

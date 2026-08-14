@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class ArchiveLinkRequest {
     @NotBlank(message = "资料名称不能为空")
@@ -18,4 +20,7 @@ public class ArchiveLinkRequest {
     private String url;
 
     private String description;
+
+    /** 所属届次（可多选） */
+    private List<Long> cohortIds;
 }

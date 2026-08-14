@@ -1,8 +1,10 @@
 package com.openatom.club.archive.dto;
 
 import com.openatom.club.archive.entity.ArchiveLink;
+import com.openatom.club.cohort.dto.CohortResponse;
 import lombok.Data;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Data
 public class ArchiveLinkResponse {
@@ -12,6 +14,7 @@ public class ArchiveLinkResponse {
     private String archiveType;
     private String url;
     private String description;
+    private List<CohortResponse> cohorts;
     private String createdBy;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

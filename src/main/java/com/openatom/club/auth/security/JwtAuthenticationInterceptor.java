@@ -3,6 +3,8 @@ package com.openatom.club.auth.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openatom.club.auth.entity.UserAccount;
 import com.openatom.club.auth.repository.UserAccountRepository;
+import com.openatom.club.cohort.entity.Cohort;
+import com.openatom.club.cohort.repository.CohortRepository;
 import com.openatom.club.common.response.ApiResponse;
 import com.openatom.club.common.security.ActorContext;
 import com.openatom.club.common.security.ActorHolder;
@@ -33,6 +35,7 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserAccountRepository userAccountRepository;
     private final MemberRepository memberRepository;
+    private final CohortRepository cohortRepository;
     private final ObjectMapper objectMapper;
 
     /** 不需要认证的路径前缀 */
@@ -91,6 +94,8 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
         String name = user.getUsername();
         String department = null;
         String position = "社员";
+        Long cohortId = null;
+        Integer cohortYear = null;
 
         if (user.getMemberId() != null) {
             Member member = memberRepository.findByIdAndDeletedAtIsNull(user.getMemberId()).orElse(null);
@@ -98,6 +103,11 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
                 name = member.getName();
                 department = member.getDepartment();
                 position = member.getPosition();
+                cohortId = member.getCohortId();
+                if (cohortId != null) {
+                    cohortYear = cohortRepository.findByIdAndDeletedAtIsNull(cohortId)
+                            .map(Cohort::getYear).orElse(null);
+                }
             }
         }
 
@@ -106,6 +116,8 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
         actor.setUserId(userId);
         actor.setUsername(user.getUsername());
         actor.setMemberId(user.getMemberId());
+        actor.setCohortId(cohortId);
+        actor.setCohortYear(cohortYear);
         ActorHolder.set(actor);
         return true;
     }

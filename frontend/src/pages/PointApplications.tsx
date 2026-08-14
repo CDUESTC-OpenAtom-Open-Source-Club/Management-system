@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   Table, Select, Input, Space, Button, Tag, Modal,
-  Form, message,
+  Form, message, Segmented,
 } from 'antd'
 import { SearchOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -13,7 +13,9 @@ import {
   approvePointApplication,
   rejectPointApplication,
 } from '../api/point'
+import { getCohorts } from '../api/cohort'
 import type { PointApplication } from '../types/point'
+import type { Cohort } from '../types/cohort'
 import { canManage } from '../utils/permission'
 
 const STATUS_TAG: Record<string, { color: string; label: string }> = {
@@ -21,6 +23,7 @@ const STATUS_TAG: Record<string, { color: string; label: string }> = {
   APPROVED: { color: 'green', label: '已通过' },
   REJECTED: { color: 'red', label: '已驳回' },
 }
+const UNASSIGNED = 'unassigned'
 
 const PointApplications: React.FC = () => {
   const [loading, setLoading] = useState(false)
@@ -31,17 +34,22 @@ const PointApplications: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [keyword, setKeyword] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [activeCohort, setActiveCohort] = useState<string>('all')
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectingId, setRejectingId] = useState<number | null>(null)
   const [rejectForm] = Form.useForm<{ reviewComment: string }>()
   const [submitting, setSubmitting] = useState(false)
 
+  const cohortId = activeCohort === 'all' ? undefined : activeCohort === UNASSIGNED ? -1 : Number(activeCohort)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const res = await getPointApplications({
         status: statusFilter || undefined,
+        cohortId,
         keyword: keyword || undefined,
         page,
         size: pageSize,
@@ -51,9 +59,10 @@ const PointApplications: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, keyword, page, pageSize])
+  }, [statusFilter, keyword, page, pageSize, cohortId])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { getCohorts().then(setCohorts) }, [])
 
   const handleApprove = async (id: number) => {
     await approvePointApplication(id)
@@ -135,6 +144,16 @@ const PointApplications: React.FC = () => {
   return (
     <PermissionGuard allowed={canManage()}>
       <PageContainer title="积分审核">
+        <Segmented
+          value={activeCohort}
+          options={[
+            { label: '全部', value: 'all' },
+            ...cohorts.map((c) => ({ label: `${c.year}届`, value: String(c.id) })),
+            { label: '未分届', value: UNASSIGNED },
+          ]}
+          onChange={(v) => { setActiveCohort(v as string); setPage(1) }}
+          style={{ marginBottom: 12 }}
+        />
         <Space style={{ marginBottom: 16 }} wrap>
           <Select
             value={statusFilter}

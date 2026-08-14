@@ -16,13 +16,14 @@ import org.springframework.web.bind.annotation.*;
 public class PointTableController {
     private final PointTableService pointTableService;
 
-    @Operation(summary = "获取积分表（动态列）")
+    @Operation(summary = "获取积分表（动态列，cohortId: 空=全部，-1=未分届）")
     @GetMapping("/table")
     public ApiResponse<PointTableResult> getTable(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int size,
-            @RequestParam(required = false) String keyword) {
-        return ApiResponse.success(pointTableService.getTable(page, size, keyword));
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long cohortId) {
+        return ApiResponse.success(pointTableService.getTable(page, size, keyword, cohortId));
     }
 
     @Operation(summary = "搜索成员在积分表中的位置")
@@ -30,7 +31,8 @@ public class PointTableController {
     public ApiResponse<SearchPositionResult> searchPosition(
             @RequestParam String keyword,
             @RequestParam(defaultValue = "50") int pageSize,
-            @RequestParam(defaultValue = "0") int matchIndex) {
-        return ApiResponse.success(pointTableService.searchPosition(keyword, pageSize, matchIndex));
+            @RequestParam(defaultValue = "0") int matchIndex,
+            @RequestParam(required = false) Long cohortId) {
+        return ApiResponse.success(pointTableService.searchPosition(keyword, pageSize, matchIndex, cohortId));
     }
 }

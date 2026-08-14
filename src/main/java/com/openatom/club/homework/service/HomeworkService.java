@@ -1,5 +1,7 @@
 package com.openatom.club.homework.service;
 
+import com.openatom.club.cohort.entity.Cohort;
+import com.openatom.club.cohort.repository.CohortRepository;
 import com.openatom.club.common.exception.BizException;
 import com.openatom.club.common.exception.PermissionDeniedException;
 import com.openatom.club.common.security.ActorContext;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -35,14 +38,23 @@ public class HomeworkService {
     private final HomeworkSubmissionRepository submissionRepository;
     private final MemberRepository memberRepository;
     private final PointItemRepository pointItemRepository;
+    private final CohortRepository cohortRepository;
     private final PermissionChecker permissionChecker;
     private final OperationLogService logService;
 
     // ==================== 管理端列表 ====================
 
-    public Page<HomeworkAssignmentResponse> listAssignments(String status, int page, int size) {
+    /**
+     * @param department 部长固定为本部门；fullAccess 可选
+     */
+    public Page<HomeworkAssignmentResponse> listAssignments(String status, Long cohortId, String department, int page, int size) {
         permissionChecker.requireManageHomework();
-        Page<HomeworkAssignment> assignmentPage = assignmentRepository.findAllWithFilters(status,
+        ActorContext actor = ActorHolder.get();
+        String deptFilter = department;
+        if (!actor.isFullAccess() && "部长".equals(actor.getPosition())) {
+            deptFilter = actor.getDepartment(); // 部长固定本部门
+        }
+        Page<HomeworkAssignment> assignmentPage = assignmentRepository.findAllWithFilters(status, cohortId, deptFilter,
                 PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createdAt")));
         return assignmentPage.map(this::toResponse);
     }
@@ -56,11 +68,12 @@ public class HomeworkService {
         Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
                 .orElseThrow(() -> BizException.of("成员不存在"));
         String dept = member.getDepartment();
+        Long cohortId = actor.getCohortId();
 
-        // 查找所有已发布且未过截止时间的作业
         List<HomeworkAssignment> all = assignmentRepository.findAll();
         List<HomeworkAssignment> relevant = all.stream()
                 .filter(a -> "PUBLISHED".equals(a.getStatus()) || "CLOSED".equals(a.getStatus()))
+                .filter(a -> Objects.equals(a.getCohortId(), cohortId))
                 .filter(a -> "ALL".equals(a.getTargetType()) ||
                         (dept != null && dept.equals(a.getTargetDepartment())))
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
@@ -68,7 +81,6 @@ public class HomeworkService {
 
         return relevant.stream().map(a -> {
             HomeworkAssignmentResponse r = toResponse(a);
-            // 附加当前成员的提交状态
             HomeworkSubmission sub = submissionRepository
                     .findByHomeworkIdAndMemberIdAndDeletedAtIsNull(a.getId(), memberId).orElse(null);
             if (sub != null) {
@@ -79,12 +91,45 @@ public class HomeworkService {
         }).toList();
     }
 
-    // ==================== 详情 ====================
+    // ==================== 详情（补严权限） ====================
 
     public HomeworkAssignmentResponse getAssignment(Long id) {
         HomeworkAssignment a = assignmentRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> BizException.of("作业不存在"));
+        checkAssignmentViewPermission(a);
         return toResponse(a);
+    }
+
+    private void checkAssignmentViewPermission(HomeworkAssignment a) {
+        ActorContext actor = ActorHolder.get();
+        if (actor.isFullAccess()) return;
+        // 部长：本部门管理访问（不限制届次）
+        if ("部长".equals(actor.getPosition()) && isMinisterDeptScope(a)) return;
+        // 个人视角：非草稿 + 同届 + 符合部门范围
+        if ("DRAFT".equals(a.getStatus())) {
+            throw PermissionDeniedException.of("您不能查看草稿作业");
+        }
+        if (!Objects.equals(a.getCohortId(), actor.getCohortId())) {
+            throw PermissionDeniedException.of("您不能查看其他届次的作业");
+        }
+        if (!isMemberInTargetForActor(a, actor)) {
+            throw PermissionDeniedException.of("您不在该作业的目标范围内");
+        }
+    }
+
+    private boolean isMinisterDeptScope(HomeworkAssignment a) {
+        ActorContext actor = ActorHolder.get();
+        return "DEPARTMENT".equals(a.getTargetType()) &&
+                actor.getDepartment() != null &&
+                actor.getDepartment().equals(a.getTargetDepartment());
+    }
+
+    private boolean isMemberInTargetForActor(HomeworkAssignment a, ActorContext actor) {
+        if ("ALL".equals(a.getTargetType())) return true;
+        if ("DEPARTMENT".equals(a.getTargetType())) {
+            return actor.getDepartment() != null && actor.getDepartment().equals(a.getTargetDepartment());
+        }
+        return false;
     }
 
     // ==================== 创建 ====================
@@ -93,12 +138,14 @@ public class HomeworkService {
     public HomeworkAssignmentResponse createAssignment(HomeworkAssignmentRequest req) {
         permissionChecker.requireManageHomework();
         validateTargetScope(req);
+        requireActiveCohort(req.getCohortId());
 
         HomeworkAssignment a = new HomeworkAssignment();
         a.setTitle(req.getTitle());
         a.setDescription(req.getDescription());
         a.setTargetType(req.getTargetType());
         a.setTargetDepartment(req.getTargetDepartment());
+        a.setCohortId(req.getCohortId());
         a.setDeadline(req.getDeadline());
         a.setMaxPoints(req.getMaxPoints());
         a.setPointItemId(req.getPointItemId());
@@ -112,7 +159,7 @@ public class HomeworkService {
 
         HomeworkAssignment saved = assignmentRepository.save(a);
         logService.log("homework", "CREATE", String.valueOf(saved.getId()),
-                "创建作业: " + saved.getTitle());
+                "创建作业: " + saved.getTitle() + "（" + cohortLabel(saved.getCohortId()) + "）");
         return toResponse(saved);
     }
 
@@ -124,14 +171,14 @@ public class HomeworkService {
         HomeworkAssignment a = assignmentRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> BizException.of("作业不存在"));
         validateOwnership(a);
-
-        // 验证目标范围
         validateTargetScope(req);
+        requireActiveCohort(req.getCohortId());
 
         a.setTitle(req.getTitle());
         a.setDescription(req.getDescription());
         a.setTargetType(req.getTargetType());
         a.setTargetDepartment(req.getTargetDepartment());
+        a.setCohortId(req.getCohortId());
         a.setDeadline(req.getDeadline());
         a.setMaxPoints(req.getMaxPoints());
         if (req.getPointItemId() != null) {
@@ -160,7 +207,7 @@ public class HomeworkService {
         a.setStatus("PUBLISHED");
         HomeworkAssignment saved = assignmentRepository.save(a);
         logService.log("homework", "PUBLISH", String.valueOf(saved.getId()),
-                "发布作业: " + saved.getTitle());
+                "发布作业: " + saved.getTitle() + "（" + cohortLabel(saved.getCohortId()) + "）");
         return toResponse(saved);
     }
 
@@ -191,7 +238,6 @@ public class HomeworkService {
                 .orElseThrow(() -> BizException.of("作业不存在"));
         validateOwnership(a);
 
-        // 检查是否有已批改的提交
         long gradedCount = submissionRepository.countByHomeworkIdAndStatus(a.getId(), "GRADED");
         if (gradedCount > 0) {
             throw BizException.of("该作业已有批改记录，无法删除。请先关闭作业或撤销批改");
@@ -207,26 +253,23 @@ public class HomeworkService {
 
     private HomeworkAssignmentResponse toResponse(HomeworkAssignment a) {
         HomeworkAssignmentResponse r = HomeworkAssignmentResponse.from(a);
-        // 补充积分项目名称
+        r.setCohortYear(a.getCohortId() == null ? null : cohortYear(a.getCohortId()));
         if (a.getPointItemId() != null) {
             pointItemRepository.findById(a.getPointItemId()).ifPresent(pi -> r.setPointItemName(pi.getItemName()));
         }
-        // 补充创建者姓名
         r.setCreatedByName(ActorHolder.get().getName());
-        // 统计提交数量
         r.setSubmissionCount(submissionRepository.countByHomeworkId(a.getId()));
         r.setSubmittedCount(submissionRepository.countByHomeworkIdAndStatus(a.getId(), "SUBMITTED"));
         r.setGradedCount(submissionRepository.countByHomeworkIdAndStatus(a.getId(), "GRADED"));
         return r;
     }
 
-    /** 验证部长不能创建 ALL 或其它部门作业 */
+    /** 验证部长不能创建 ALL 或其它部门作业（届次自由） */
     private void validateTargetScope(HomeworkAssignmentRequest req) {
         ActorContext actor = ActorHolder.get();
-        if (actor.isFullAccess()) return; // fullAccess 无限制
+        if (actor.isFullAccess()) return;
 
         if ("部长".equals(actor.getPosition())) {
-            // 部长只能创建自己部门的作业
             if ("ALL".equals(req.getTargetType())) {
                 throw PermissionDeniedException.of("部长不能发布面向全体成员的作业");
             }
@@ -240,21 +283,12 @@ public class HomeworkService {
         }
     }
 
-    /** 验证创建者是否可以管理此作业（部长不能管理其他部长的作业等） */
+    /** 验证创建者是否可以管理此作业（部长不能管理其他部门作业） */
     private void validateOwnership(HomeworkAssignment a) {
         ActorContext actor = ActorHolder.get();
         if (actor.isFullAccess()) return;
 
         if ("部长".equals(actor.getPosition())) {
-            // 部长只能管理自己部门的作业
-            if (a.getCreatedByUserId() != null && !a.getCreatedByUserId().equals(actor.getUserId())) {
-                // 如果不是自己创建的，至少检查是否自己部门的
-                if (!"DEPARTMENT".equals(a.getTargetType()) ||
-                        !actor.getDepartment().equals(a.getTargetDepartment())) {
-                    throw PermissionDeniedException.of("您只能管理本部门的作业");
-                }
-            }
-            // 不管是不是自己创建的，部长只能管理自己部门的作业
             if ("ALL".equals(a.getTargetType())) {
                 throw PermissionDeniedException.of("您只能管理本部门的作业");
             }
@@ -263,5 +297,23 @@ public class HomeworkService {
                 throw PermissionDeniedException.of("您只能管理本部门的作业");
             }
         }
+    }
+
+    private void requireActiveCohort(Long cohortId) {
+        Cohort cohort = cohortRepository.findByIdAndDeletedAtIsNull(cohortId)
+                .orElseThrow(() -> BizException.of("届次不存在"));
+        if (!Boolean.TRUE.equals(cohort.getEnabled())) {
+            throw BizException.of("届次已停用，不能创建作业");
+        }
+    }
+
+    private Integer cohortYear(Long cohortId) {
+        if (cohortId == null) return null;
+        return cohortRepository.findByIdAndDeletedAtIsNull(cohortId).map(Cohort::getYear).orElse(null);
+    }
+
+    private String cohortLabel(Long cohortId) {
+        Integer y = cohortYear(cohortId);
+        return y == null ? "未分届" : y + "届";
     }
 }

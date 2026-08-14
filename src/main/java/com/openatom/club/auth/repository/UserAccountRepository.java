@@ -15,19 +15,22 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
 
     Optional<UserAccount> findByIdAndDeletedAtIsNull(Long id);
 
+    java.util.List<UserAccount> findAllByMemberIdInAndDeletedAtIsNull(java.util.List<Long> memberIds);
+
     boolean existsByUsernameAndDeletedAtIsNull(String username);
 
     @Query("""
         SELECT u FROM UserAccount u
         LEFT JOIN Member m ON m.id = u.memberId
         WHERE u.deletedAt IS NULL
+          AND (:cohortId IS NULL OR (:cohortId = -1 AND m.cohortId IS NULL) OR m.cohortId = :cohortId)
           AND (:keyword IS NULL OR :keyword = ''
                OR LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(m.name)     LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(m.studentNo) LIKE LOWER(CONCAT('%', :keyword, '%')))
         ORDER BY u.createdAt DESC
     """)
-    Page<UserAccount> searchUsers(@Param("keyword") String keyword, Pageable pageable);
+    Page<UserAccount> searchUsers(@Param("keyword") String keyword, @Param("cohortId") Long cohortId, Pageable pageable);
 
     long countByProfileCompletedAndDeletedAtIsNull(boolean profileCompleted);
 }

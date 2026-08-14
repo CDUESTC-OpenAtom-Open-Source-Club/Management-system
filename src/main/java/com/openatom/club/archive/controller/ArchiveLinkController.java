@@ -18,15 +18,16 @@ import org.springframework.web.bind.annotation.*;
 public class ArchiveLinkController {
     private final ArchiveLinkService archiveLinkService;
 
-    @Operation(summary = "查询归档链接列表")
+    @Operation(summary = "查询归档链接列表（cohortId: 空=全部，-1=未分届）")
     @GetMapping
     public ApiResponse<PageResult<ArchiveLinkResponse>> list(
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) String type,
+            @RequestParam(required = false) Long cohortId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.success(archiveLinkService.list(year, type, keyword, page, size));
+        return ApiResponse.success(archiveLinkService.list(year, type, cohortId, keyword, page, size));
     }
 
     @Operation(summary = "新增归档链接")

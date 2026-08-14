@@ -13,10 +13,12 @@ public class MemberResponse {
     private String major;
     private String department;
     private String position;
+    private Long cohortId;
+    private Integer cohortYear;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
-    public static MemberResponse from(Member m) {
+    public static MemberResponse from(Member m, Integer cohortYear) {
         MemberResponse dto = new MemberResponse();
         dto.id = m.getId();
         dto.name = m.getName();
@@ -25,6 +27,8 @@ public class MemberResponse {
         dto.major = m.getMajor();
         dto.department = m.getDepartment();
         dto.position = m.getPosition();
+        dto.cohortId = m.getCohortId();
+        dto.cohortYear = cohortYear;
         dto.createdAt = m.getCreatedAt();
         dto.updatedAt = m.getUpdatedAt();
         return dto;

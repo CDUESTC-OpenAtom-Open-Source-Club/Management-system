@@ -10,7 +10,10 @@ import PageContainer from '../components/PageContainer'
 import {
   getArchiveLinks, createArchiveLink, updateArchiveLink, deleteArchiveLink,
 } from '../api/archive'
+import { getCohorts } from '../api/cohort'
 import type { ArchiveLink, ArchiveLinkForm } from '../types/archive'
+import type { Cohort } from '../types/cohort'
+import { cohortLabel } from '../utils/cohort'
 import { canManage } from '../utils/permission'
 
 const { Text } = Typography
@@ -31,6 +34,8 @@ const ArchiveLinks: React.FC = () => {
   const [pageSize] = useState(20)
   const [yearFilter, setYearFilter] = useState<number | undefined>()
   const [typeFilter, setTypeFilter] = useState<string>('')
+  const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [cohortFilter, setCohortFilter] = useState<number | undefined>()
   const [keyword, setKeyword] = useState('')
   const [searchInput, setSearchInput] = useState('')
 
@@ -45,6 +50,7 @@ const ArchiveLinks: React.FC = () => {
       const res = await getArchiveLinks({
         year: yearFilter,
         type: typeFilter || undefined,
+        cohortId: cohortFilter,
         keyword: keyword || undefined,
         page,
         size: pageSize,
@@ -54,20 +60,24 @@ const ArchiveLinks: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [yearFilter, typeFilter, keyword, page, pageSize])
+  }, [yearFilter, typeFilter, keyword, page, pageSize, cohortFilter])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { getCohorts().then(setCohorts) }, [])
 
   const handleAdd = () => {
     setEditing(null)
     form.resetFields()
-    form.setFieldsValue({ archiveYear: currentYear })
+    form.setFieldsValue({ archiveYear: currentYear, cohortIds: [] })
     setModalOpen(true)
   }
 
   const handleEdit = (record: ArchiveLink) => {
     setEditing(record)
-    form.setFieldsValue(record)
+    form.setFieldsValue({
+      ...record,
+      cohortIds: record.cohorts?.map((c) => c.id) ?? [],
+    })
     setModalOpen(true)
   }
 
@@ -97,6 +107,13 @@ const ArchiveLinks: React.FC = () => {
 
   const columns: ColumnsType<ArchiveLink> = [
     { title: '年份', dataIndex: 'archiveYear', width: 80 },
+    {
+      title: '所属届次', dataIndex: 'cohorts', width: 150,
+      render: (cohorts: Cohort[] | undefined) =>
+        !cohorts || cohorts.length === 0
+          ? <Tag>未分届</Tag>
+          : cohorts.map((c) => <Tag key={c.id}>{cohortLabel(c.year)}</Tag>),
+    },
     {
       title: '类型', dataIndex: 'archiveType', width: 100,
       render: (v: string) => <Tag color={TYPE_COLOR[v] ?? 'default'}>{v}</Tag>,
@@ -156,6 +173,16 @@ const ArchiveLinks: React.FC = () => {
           options={YEAR_OPTIONS.map((y) => ({ label: `${y}年`, value: y }))}
         />
         <Select
+          allowClear placeholder="届次筛选"
+          style={{ width: 120 }}
+          value={cohortFilter ?? undefined}
+          onChange={(v) => { setCohortFilter(v ?? undefined); setPage(1) }}
+          options={[
+            ...cohorts.map((c) => ({ label: `${c.year}届`, value: c.id })),
+            { label: '未分届', value: -1 },
+          ]}
+        />
+        <Select
           allowClear placeholder="类型筛选"
           style={{ width: 120 }}
           value={typeFilter || undefined}
@@ -203,6 +230,20 @@ const ArchiveLinks: React.FC = () => {
           </Form.Item>
           <Form.Item label="年份" name="archiveYear" rules={[{ required: true, message: '请输入年份' }]}>
             <InputNumber min={2020} max={2099} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="所属届次" name="cohortIds" rules={[{ required: true, message: '请选择所属届次' }]}>
+            <Select
+              mode="multiple"
+              allowClear
+              placeholder="请选择所属届次（可多选）"
+              options={cohorts.map((c) => ({ label: `${c.year}届`, value: c.id }))}
+              onChange={(vals: number[]) => {
+                if (vals && vals.length > 0) {
+                  const c = cohorts.find((x) => x.id === vals[0])
+                  if (c) form.setFieldValue('archiveYear', c.year)
+                }
+              }}
+            />
           </Form.Item>
           <Form.Item label="资料类型" name="archiveType" rules={[{ required: true, message: '请选择类型' }]}>
             <Select options={ARCHIVE_TYPES.map((t) => ({ label: t, value: t }))} placeholder="请选择资料类型" />

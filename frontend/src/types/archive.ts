@@ -1,3 +1,5 @@
+import type { Cohort } from './cohort'
+
 export interface ArchiveLink {
   id: number
   title: string
@@ -5,6 +7,7 @@ export interface ArchiveLink {
   archiveType: string
   url: string
   description?: string
+  cohorts?: Cohort[]
   createdBy?: string
   createdAt?: string
   updatedAt?: string
@@ -16,4 +19,5 @@ export interface ArchiveLinkForm {
   archiveType: string
   url: string
   description?: string
+  cohortIds?: number[]
 }

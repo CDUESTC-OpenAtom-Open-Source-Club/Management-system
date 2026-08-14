@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface PointRecordRepository extends JpaRepository<PointRecord, Long> {
     List<PointRecord> findAllByMemberIdAndDeletedAtIsNull(Long memberId);
 
+    List<PointRecord> findAllByMemberIdInAndDeletedAtIsNull(List<Long> memberIds);
+
     Optional<PointRecord> findByIdAndDeletedAtIsNull(Long id);
 
     @Query("SELECT r.memberId, COALESCE(SUM(r.score), 0) FROM PointRecord r WHERE r.deletedAt IS NULL GROUP BY r.memberId")

@@ -15,6 +15,8 @@ public class CurrentUserResponse {
     private String major;
     private String department;
     private String position;
+    private Long cohortId;
+    private Integer cohortYear;
     private boolean fullAccess;
     private boolean profileCompleted;
     private boolean initialPasswordChanged;

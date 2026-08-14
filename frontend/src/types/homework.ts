@@ -6,6 +6,8 @@ export interface HomeworkAssignment {
   description?: string
   targetType: 'ALL' | 'DEPARTMENT'
   targetDepartment?: string
+  cohortId?: number | null
+  cohortYear?: number | null
   deadline: string
   status: 'DRAFT' | 'PUBLISHED' | 'CLOSED'
   maxPoints?: number
@@ -25,6 +27,7 @@ export interface HomeworkAssignmentForm {
   description?: string
   targetType: 'ALL' | 'DEPARTMENT'
   targetDepartment?: string
+  cohortId: number
   deadline: string
   maxPoints?: number
   pointItemId?: number

@@ -5,6 +5,7 @@ import type { ArchiveLink, ArchiveLinkForm } from '../types/archive'
 export function getArchiveLinks(params: {
   year?: number
   type?: string
+  cohortId?: number
   keyword?: string
   page?: number
   size?: number

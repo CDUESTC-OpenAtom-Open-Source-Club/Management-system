@@ -29,19 +29,19 @@ public class PointApplicationController {
 
     @Operation(summary = "查询我的登记记录")
     @GetMapping("/my")
-    public ApiResponse<List<PointApplicationResponse>> myApplications(
-            @RequestParam Long memberId) {
-        return ApiResponse.success(applicationService.myApplications(memberId));
+    public ApiResponse<List<PointApplicationResponse>> myApplications() {
+        return ApiResponse.success(applicationService.myApplications());
     }
 
-    @Operation(summary = "查询全部登记（秘书处及以上）")
+    @Operation(summary = "查询全部登记（秘书处及以上，cohortId: 空=全部，-1=未分届）")
     @GetMapping
     public ApiResponse<PageResult<PointApplicationResponse>> listAll(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long cohortId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.success(applicationService.listAll(status, keyword, page, size));
+        return ApiResponse.success(applicationService.listAll(status, cohortId, keyword, page, size));
     }
 
     @Operation(summary = "审核通过")

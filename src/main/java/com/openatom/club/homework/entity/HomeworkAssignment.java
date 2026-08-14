@@ -27,6 +27,9 @@ public class HomeworkAssignment {
     @Column(name = "target_department", length = 100)
     private String targetDepartment;
 
+    @Column(name = "cohort_id")
+    private Long cohortId;
+
     @Column(nullable = false)
     private OffsetDateTime deadline;
 

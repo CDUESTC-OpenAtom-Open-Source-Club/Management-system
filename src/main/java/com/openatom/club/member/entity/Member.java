@@ -32,6 +32,9 @@ public class Member {
     @Column(length = 50, nullable = false)
     private String position = "社员";
 
+    @Column(name = "cohort_id")
+    private Long cohortId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

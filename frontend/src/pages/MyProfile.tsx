@@ -1,17 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Form, Input, message, Select, Space, Spin, Typography, Alert, Divider } from 'antd'
+import React, { useEffect, useState } from 'react'
+import { Button, Card, Form, Input, message, Descriptions, Space, Spin, Typography, Alert, Divider } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { getMyProfile, updateMyProfile } from '../api/profile'
 import { changePassword } from '../api/auth'
 import { getCurrentUser, setCurrentUser, clearAuth } from '../utils/auth'
 import type { MyProfileResponse, UpdateMyProfileRequest } from '../api/auth'
+import { cohortLabel } from '../utils/cohort'
 
 const { Title, Text } = Typography
-
-const COMMON_DEPARTMENTS = ['技术部', '宣传部', '外联部', '组织部', '其他']
-const FULL_DEPARTMENTS = ['秘书处', ...COMMON_DEPARTMENTS]
-const NORMAL_POSITIONS = ['社员', '部长']
-const FULL_POSITIONS = ['社员', '部长', '会长', '副会长']
 
 const MyProfile: React.FC = () => {
   const [form] = Form.useForm()
@@ -22,16 +18,6 @@ const MyProfile: React.FC = () => {
   const [passwordForm] = Form.useForm<{ oldPassword: string; newPassword: string; confirmPassword: string }>()
   const navigate = useNavigate()
   const currentUser = getCurrentUser()
-  const fullAccess = currentUser?.fullAccess === true
-
-  const departmentOptions = useMemo(
-    () => (fullAccess ? FULL_DEPARTMENTS : COMMON_DEPARTMENTS),
-    [fullAccess],
-  )
-  const positionOptions = useMemo(
-    () => (fullAccess ? FULL_POSITIONS : NORMAL_POSITIONS),
-    [fullAccess],
-  )
 
   useEffect(() => {
     void loadProfile()
@@ -47,8 +33,6 @@ const MyProfile: React.FC = () => {
         studentNo: res.studentNo,
         phone: res.phone,
         major: res.major,
-        department: res.department,
-        position: res.position,
       })
     } finally {
       setLoading(false)
@@ -176,6 +160,17 @@ const MyProfile: React.FC = () => {
 
         <Divider />
 
+        {/* 组织身份（只读，由管理员在成员管理中维护） */}
+        <Card size="small" title="组织身份" style={{ maxWidth: 720 }}>
+          <Descriptions column={3} size="small">
+            <Descriptions.Item label="届次">{cohortLabel(profile?.cohortYear)}</Descriptions.Item>
+            <Descriptions.Item label="部门">{profile?.department || '—'}</Descriptions.Item>
+            <Descriptions.Item label="职务">{profile?.position || '—'}</Descriptions.Item>
+          </Descriptions>
+          <Text type="secondary">届次、部门、职务由管理员在「成员管理」中维护，本人不可修改。</Text>
+        </Card>
+
+        {/* 个人资料（仅本人可维护） */}
         <Form
           form={form}
           layout="vertical"
@@ -193,18 +188,6 @@ const MyProfile: React.FC = () => {
           </Form.Item>
           <Form.Item label="专业" name="major">
             <Input placeholder="请输入专业" />
-          </Form.Item>
-          <Form.Item label="部门" name="department">
-            <Select
-              placeholder="请选择部门"
-              options={departmentOptions.map((item) => ({ label: item, value: item }))}
-            />
-          </Form.Item>
-          <Form.Item label="职务" name="position">
-            <Select
-              placeholder="请选择职务"
-              options={positionOptions.map((item) => ({ label: item, value: item }))}
-            />
           </Form.Item>
           <Space>
             <Button onClick={() => navigate(-1)}>返回</Button>

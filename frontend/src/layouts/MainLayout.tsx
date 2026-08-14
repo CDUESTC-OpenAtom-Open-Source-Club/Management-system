@@ -20,6 +20,7 @@ import {
   BookOutlined,
   EditOutlined,
   FileSearchOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons'
 import { changePassword } from '../api/auth'
 import { canManage, canViewFinance, canViewLogs, isFullAccess, canManageHomework } from '../utils/permission'
@@ -55,6 +56,7 @@ const MainLayout: React.FC = () => {
     { key: '/operation-logs', icon: <AuditOutlined />, label: '操作日志', show: canViewLogs() },
     { key: '/my-profile', icon: <IdcardOutlined />, label: '我的资料' },
     { key: '/users', icon: <UserOutlined />, label: '账号管理', show: isFullAccess() },
+    { key: '/cohorts', icon: <CalendarOutlined />, label: '届次管理', show: isFullAccess() },
   ].filter((item) => item.show === undefined || item.show)), [])
 
   const selectedKey = items.find((i) => i.key !== '/' && location.pathname.startsWith(i.key))?.key ?? location.pathname

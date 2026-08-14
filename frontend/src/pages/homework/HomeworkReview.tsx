@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Descriptions, Empty, message,
-  Card, Row, Col, Statistic
+  Card, Row, Col, Statistic, Segmented
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -11,6 +11,8 @@ import PageContainer from '../../components/PageContainer'
 import { listAssignments, listSubmissions, getSubmission, gradeSubmission, getDownloadFileUrl, getViewFileUrl } from '../../api/homework'
 import { downloadFile, viewFile } from '../../utils/download'
 import type { HomeworkAssignment, HomeworkSubmission, GradeRequest } from '../../types/homework'
+import { getCohorts } from '../../api/cohort'
+import type { Cohort } from '../../types/cohort'
 import dayjs from 'dayjs'
 
 const { TextArea } = Input
@@ -28,16 +30,21 @@ const HomeworkReview: React.FC = () => {
   const [currentSubmission, setCurrentSubmission] = useState<HomeworkSubmission | null>(null)
   const [grading, setGrading] = useState(false)
   const [gradeForm] = Form.useForm()
+  const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [activeCohort, setActiveCohort] = useState<string>('all')
+
+  const cohortId = activeCohort === 'all' ? undefined : Number(activeCohort)
 
   const fetchAssignments = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await listAssignments(undefined, 1, 100)
+      const data = await listAssignments({ page: 1, size: 100, cohortId })
       setAssignments(data.list)
     } catch { /* handled */ } finally { setLoading(false) }
-  }, [])
+  }, [cohortId])
 
   useEffect(() => { fetchAssignments() }, [fetchAssignments])
+  useEffect(() => { getCohorts().then(setCohorts) }, [])
 
   const handleSelectAssignment = async (item: HomeworkAssignment) => {
     setSelectedAssignment(item)
@@ -137,6 +144,16 @@ const HomeworkReview: React.FC = () => {
 
   return (
     <PageContainer title="作业批改">
+      <Segmented
+        value={activeCohort}
+        options={[
+          { label: '全部', value: 'all' },
+          ...cohorts.map((c) => ({ label: `${c.year}届`, value: String(c.id) })),
+        ]}
+        onChange={(v) => setActiveCohort(v as string)}
+        style={{ marginBottom: 16 }}
+      />
+
       {/* 返回按钮 */}
       {selectedAssignment ? (
         <>

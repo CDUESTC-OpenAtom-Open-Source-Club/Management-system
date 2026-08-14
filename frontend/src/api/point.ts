@@ -2,6 +2,7 @@ import request from './request'
 import type { PageResult } from '../types/common'
 import type {
   PointItem,
+  PointItemForm,
   PointApplication,
   PointRecord,
   PointsTableResponse,
@@ -18,11 +19,11 @@ export function getPointApplyOptions(): Promise<PointItem[]> {
   return request.get('/api/point-items/apply-options')
 }
 
-export function createPointItem(data: Partial<PointItem>): Promise<PointItem> {
+export function createPointItem(data: PointItemForm): Promise<PointItem> {
   return request.post('/api/point-items', data)
 }
 
-export function updatePointItem(id: number, data: Partial<PointItem>): Promise<PointItem> {
+export function updatePointItem(id: number, data: PointItemForm): Promise<PointItem> {
   return request.put(`/api/point-items/${id}`, data)
 }
 
@@ -32,18 +33,18 @@ export function deletePointItem(id: number): Promise<void> {
 
 // ── 活动登记 ──────────────────────────────────────────────
 export function submitPointApplications(data: {
-  memberId: number
   pointItemIds: number[]
 }): Promise<PointApplication[]> {
   return request.post('/api/point-applications', data)
 }
 
-export function getMyPointApplications(memberId: number): Promise<PointApplication[]> {
-  return request.get('/api/point-applications/my', { params: { memberId } })
+export function getMyPointApplications(): Promise<PointApplication[]> {
+  return request.get('/api/point-applications/my')
 }
 
 export function getPointApplications(params: {
   status?: string
+  cohortId?: number
   keyword?: string
   page?: number
   size?: number
@@ -64,6 +65,7 @@ export function getPointsTable(params: {
   page?: number
   size?: number
   keyword?: string
+  cohortId?: number
 }): Promise<PointsTableResponse> {
   return request.get('/api/points/table', { params })
 }
@@ -72,6 +74,7 @@ export function searchPointTablePosition(params: {
   keyword: string
   pageSize: number
   matchIndex: number
+  cohortId?: number
 }): Promise<SearchPositionResponse> {
   return request.get('/api/points/table/search-position', { params })
 }

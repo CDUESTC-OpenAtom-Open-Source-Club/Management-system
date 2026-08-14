@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
-  Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, Space, message, Popconfirm
+  Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, Space, message, Popconfirm, Segmented
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -15,6 +15,10 @@ import { getCurrentUser } from '../../utils/auth'
 import type { HomeworkAssignment, HomeworkAssignmentForm } from '../../types/homework'
 import type { PointItem } from '../../types/point'
 import { getPointItems } from '../../api/point'
+import { getCohorts } from '../../api/cohort'
+import type { Cohort } from '../../types/cohort'
+import CohortSelect from '../../components/CohortSelect'
+import { cohortLabel } from '../../utils/cohort'
 import dayjs from 'dayjs'
 
 const { TextArea } = Input
@@ -26,19 +30,22 @@ const HomeworkManagement: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [pointItems, setPointItems] = useState<PointItem[]>([])
+  const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [activeCohort, setActiveCohort] = useState<string>('all')
   const [form] = Form.useForm()
 
   const currentUser = getCurrentUser()
   const isMinister = currentUser?.position === '部长' && !currentUser?.fullAccess
   const ministerDept = currentUser?.department || ''
+  const cohortId = activeCohort === 'all' ? undefined : Number(activeCohort)
 
   const fetchAssignments = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await listAssignments(undefined, 1, 100)
+      const data = await listAssignments({ page: 1, size: 100, cohortId })
       setAssignments(data.list)
     } catch { /* handled */ } finally { setLoading(false) }
-  }, [])
+  }, [cohortId])
 
   const fetchPointItems = useCallback(async () => {
     try {
@@ -49,6 +56,8 @@ const HomeworkManagement: React.FC = () => {
 
   useEffect(() => { fetchAssignments(); fetchPointItems() }, [fetchAssignments, fetchPointItems])
 
+  useEffect(() => { getCohorts().then(setCohorts) }, [])
+
   const handleCreate = () => {
     setEditingId(null)
     form.resetFields()
@@ -57,6 +66,9 @@ const HomeworkManagement: React.FC = () => {
       form.setFieldsValue({ targetType: 'DEPARTMENT', targetDepartment: ministerDept })
     } else {
       form.setFieldsValue({ targetType: 'ALL' })
+    }
+    if (activeCohort !== 'all') {
+      form.setFieldsValue({ cohortId: Number(activeCohort) })
     }
     setModalOpen(true)
   }
@@ -68,6 +80,7 @@ const HomeworkManagement: React.FC = () => {
       description: item.description || '',
       targetType: item.targetType,
       targetDepartment: item.targetDepartment || undefined,
+      cohortId: item.cohortId ?? undefined,
       deadline: dayjs(item.deadline),
       maxPoints: item.maxPoints,
       pointItemId: item.pointItemId || undefined,
@@ -84,6 +97,7 @@ const HomeworkManagement: React.FC = () => {
         description: values.description || '',
         targetType: values.targetType,
         targetDepartment: values.targetDepartment || undefined,
+        cohortId: values.cohortId,
         deadline: values.deadline.toISOString(),
         maxPoints: values.maxPoints,
         pointItemId: values.pointItemId || undefined,
@@ -141,6 +155,8 @@ const HomeworkManagement: React.FC = () => {
 
   const columns: ColumnsType<HomeworkAssignment> = [
     { title: '标题', dataIndex: 'title', key: 'title' },
+    { title: '届次', dataIndex: 'cohortYear', key: 'cohort', width: 90,
+      render: (v: number | null | undefined) => cohortLabel(v) },
     { title: '目标范围', key: 'target', width: 120,
       render: (_: unknown, r: HomeworkAssignment) =>
         r.targetType === 'ALL' ? '全体成员' : r.targetDepartment || '-' },
@@ -181,6 +197,15 @@ const HomeworkManagement: React.FC = () => {
 
   return (
     <PageContainer title="作业管理">
+      <Segmented
+        value={activeCohort}
+        options={[
+          { label: '全部', value: 'all' },
+          ...cohorts.map((c) => ({ label: `${c.year}届`, value: String(c.id) })),
+        ]}
+        onChange={(v) => setActiveCohort(v as string)}
+        style={{ marginBottom: 16 }}
+      />
       <div style={{ marginBottom: 16 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>创建作业</Button>
       </div>
@@ -198,6 +223,9 @@ const HomeworkManagement: React.FC = () => {
           </Form.Item>
           <Form.Item name="description" label="作业要求">
             <TextArea rows={4} placeholder="输入作业详细说明" maxLength={5000} showCount />
+          </Form.Item>
+          <Form.Item name="cohortId" label="届次" rules={[{ required: true, message: '请选择届次' }]}>
+            <CohortSelect placeholder="请选择届次" />
           </Form.Item>
           <Space size="large">
             <Form.Item name="targetType" label="目标范围"

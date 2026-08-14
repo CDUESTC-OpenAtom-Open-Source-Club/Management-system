@@ -20,12 +20,14 @@ import java.util.List;
 public class HomeworkController {
     private final HomeworkService homeworkService;
 
-    @Operation(summary = "管理员：列出作业")
+    @Operation(summary = "管理员：列出作业（cohortId/department 可选，部长固定本部门）")
     @GetMapping("/api/homeworks/manage")
     public ApiResponse<PageResult<HomeworkAssignmentResponse>> listManage(@RequestParam(required = false) String status,
+                                                                           @RequestParam(required = false) Long cohortId,
+                                                                           @RequestParam(required = false) String department,
                                                                            @RequestParam(defaultValue = "1") int page,
                                                                            @RequestParam(defaultValue = "20") int size) {
-        Page<HomeworkAssignmentResponse> result = homeworkService.listAssignments(status, page, size);
+        Page<HomeworkAssignmentResponse> result = homeworkService.listAssignments(status, cohortId, department, page, size);
         return ApiResponse.success(new PageResult<>(result.getContent(), result.getTotalElements(), page, size));
     }
 

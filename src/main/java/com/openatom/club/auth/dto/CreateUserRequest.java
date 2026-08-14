@@ -14,5 +14,8 @@ public class CreateUserRequest {
     @Size(min = 6, message = "初始密码至少 6 位")
     private String initialPassword;
 
+    @NotNull(message = "届次不能为空")
+    private Long cohortId;
+
     private Boolean enabled = true;
 }

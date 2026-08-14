@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Carousel, Progress, Space, Statistic, Tag, Tooltip, Typography, Spin } from 'antd'
+import { Button, Card, Carousel, Progress, Space, Statistic, Tag, Tooltip, Typography, Spin, Segmented } from 'antd'
 import {
   TeamOutlined,
   TrophyOutlined,
@@ -20,6 +20,9 @@ import { getCurrentUser } from '../utils/auth'
 import { canManage, canViewFinance, canViewLogs } from '../utils/permission'
 import { getDashboardStats } from '../api/dashboard'
 import type { DashboardStats } from '../types/dashboard'
+import { getCohorts } from '../api/cohort'
+import type { Cohort } from '../types/cohort'
+import { cohortLabel } from '../utils/cohort'
 import logo from '../assets/logo.png'
 import banner1 from '../assets/banner-operations.svg'
 import banner2 from '../assets/banner-operations.svg'
@@ -73,12 +76,29 @@ const Dashboard: React.FC = () => {
   const [hoveredBar, setHoveredBar] = useState<number | null>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [activeCohort, setActiveCohort] = useState<string>(
+    fullAccess ? 'all' : (user?.cohortId != null ? String(user.cohortId) : 'all')
+  )
+
+  const cohortId = activeCohort === 'all' ? undefined : Number(activeCohort)
 
   useEffect(() => {
-    getDashboardStats()
+    setLoading(true)
+    getDashboardStats(cohortId)
       .then(setStats)
-      .catch(() => { /* 接口失败时显示空状态 */ })
+      .catch(() => { setStats(null) })
       .finally(() => setLoading(false))
+  }, [cohortId])
+
+  useEffect(() => {
+    getCohorts().then((list) => {
+      setCohorts(list)
+      if (fullAccess) {
+        const latest = list.find((c) => c.enabled)
+        if (latest) setActiveCohort(String(latest.id))
+      }
+    })
   }, [])
 
   const visibleToolbox = useMemo(() => toolbox.filter((item) => !item.managerOnly || fullAccess), [fullAccess])
@@ -106,6 +126,17 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="app-page dashboard-page">
+      {fullAccess && (
+        <Segmented
+          value={activeCohort}
+          options={[
+            { label: '全部', value: 'all' },
+            ...cohorts.map((c) => ({ label: `${c.year}届`, value: String(c.id) })),
+          ]}
+          onChange={(v) => setActiveCohort(v as string)}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <section className="dashboard-hero">
         <Card className="app-card" bordered={false}>
           <div className="dashboard-hero-left">
@@ -118,6 +149,7 @@ const Dashboard: React.FC = () => {
               <div className="dashboard-hero-tags">
                 <Tag color="blue">部门：{user?.department || '未填写'}</Tag>
                 <Tag color="green">职务：{user?.position || '成员'}</Tag>
+                <Tag color="cyan">届次：{cohortLabel(user?.cohortYear)}</Tag>
                 <Tag color="default">权限：{fullAccess ? 'fullAccess' : 'normal'}</Tag>
               </div>
             </div>

@@ -85,6 +85,11 @@ public class HomeworkSubmissionService {
             throw BizException.of("您不在该作业的目标范围内");
         }
 
+        // 检查届次归属：只能提交自己届次的作业
+        if (!Objects.equals(assignment.getCohortId(), member.getCohortId())) {
+            throw PermissionDeniedException.of("您不能提交其他届次的作业");
+        }
+
         // 检查截止时间
         if (assignment.getDeadline() != null &&
                 OffsetDateTime.now().isAfter(assignment.getDeadline())) {

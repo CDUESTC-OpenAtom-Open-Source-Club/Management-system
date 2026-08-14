@@ -6,8 +6,14 @@ import type { HomeworkAssignment, HomeworkSubmission, GradeRequest } from '../ty
 // ---- 作业管理 ----
 
 /** 管理员获取作业列表 */
-export function listAssignments(status?: string, page = 1, size = 20) {
-  return request.get<unknown, PageResult<HomeworkAssignment>>('/api/homeworks/manage', { params: { status, page, size } })
+export function listAssignments(params?: {
+  status?: string
+  cohortId?: number
+  department?: string
+  page?: number
+  size?: number
+}) {
+  return request.get<unknown, PageResult<HomeworkAssignment>>('/api/homeworks/manage', { params })
 }
 
 /** 成员获取自己的作业列表 */
@@ -26,6 +32,7 @@ export function createAssignment(data: {
   description?: string
   targetType: string
   targetDepartment?: string
+  cohortId: number
   deadline: string
   maxPoints?: number
   pointItemId?: number
@@ -39,6 +46,7 @@ export function updateAssignment(id: number, data: {
   description?: string
   targetType: string
   targetDepartment?: string
+  cohortId: number
   deadline: string
   maxPoints?: number
   pointItemId?: number

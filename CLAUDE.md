@@ -18,6 +18,8 @@ Lombok · springdoc-openapi · Apache POI · React 18 · TypeScript · Vite 5 ·
 5. **操作日志**：敏感操作通过 `OperationLogService` 写入 `operation_logs` 表。
 6. **Flyway 迁移**：数据库结构变更必须通过 `src/main/resources/db/migration/` 下的 SQL 文件。
 7. **前端风格一致**：后台使用白色/浅灰内容区 + 标准 Ant Design 组件，登录页为深蓝宇宙星空风。
+8. **届次体系**：以「届次（cohort）」为一级数据归属维度，成员/账号/积分/活动/作业按届隔离；
+   「届次/部门/职务」三者是**组织身份**，只能由 fullAccess 管理员在成员管理中修改，普通成员不可改。
 
 ## 数据库
 
@@ -31,29 +33,34 @@ Lombok · springdoc-openapi · Apache POI · React 18 · TypeScript · Vite 5 ·
 
 Docker Compose 位于项目根目录：`docker-compose.yml`（PostgreSQL 16 Alpine）。
 
-### 表结构（15 张核心表）
+### 表结构（18 张核心表）
 
 | 表 | 说明 |
 |----|------|
-| `members` | 成员信息（name, student_no, phone, major, department, position） |
+| `cohorts` | 届次（year UNIQUE, enabled；预置 2025/2026，软删除） |
+| `members` | 成员信息（name, student_no, phone, major, department, position, **cohort_id**） |
 | `users` | 登录账号（username, password_hash, member_id, enabled） |
 | `point_items` | 积分项目定义（item_name, point_value, item_type, allow_member_apply） |
+| `point_item_cohorts` | 积分项目适用届次关系表（point_item_id + cohort_id，0 条 = 全局适用） |
 | `point_applications` | 积分申请（member_id, point_item_id, status: PENDING/APPROVED/REJECTED） |
 | `point_records` | 积分流水（member_id, score, source_type: APPLICATION/MANUAL/HOMEWORK） |
 | `archive_links` | 活动资料归档链接（title, archive_year, archive_type, url） |
+| `archive_cohorts` | 活动归档届次关系表（archive_id + cohort_id，多对多） |
 | `meeting_minutes` | 会议纪要（title, meeting_date, file_id） |
 | `finance_periods` | 财务月份（finance_year, finance_month，UNIQUE 约束） |
 | `finance_files` | 财务文件（period_id, file_id, file_type: REPORT/VOUCHER） |
 | `files` | 文件元数据（original_name, stored_name, file_path, module_name） |
 | `operation_logs` | 操作日志（operator_name, module_name, action_type, description） |
 | `login_logs` | 登录日志（user_id, success, ip_address） |
-| `homework_assignments` | 作业发布（title, target_type: ALL/DEPARTMENT, deadline, status: DRAFT/PUBLISHED/CLOSED） |
+| `homework_assignments` | 作业发布（title, target_type: ALL/DEPARTMENT, deadline, status, **cohort_id**） |
 | `homework_submissions` | 作业提交（homework_id+member_id UNIQUE, status: SUBMITTED/GRADED, point_record_id） |
 | `homework_submission_files` | 作业附件关联（submission_id, file_id） |
 
+> `members.cohort_id` / `homework_assignments.cohort_id` 可空（历史数据 = 未分届）；新成员/新作业强制选届。
+
 ## 权限系统
 
-没有独立的 `role` 表。权限由 `members.position` 和 `members.department` 动态计算：
+没有独立的 `role` 表。权限由 `members.position` + `members.department` + `members.cohort_id` 动态计算：
 
 ```java
 boolean fullAccess = "会长".equals(position)
@@ -61,14 +68,18 @@ boolean fullAccess = "会长".equals(position)
                   || "秘书处".equals(department);
 ```
 
+**组织身份 = 届次 + 部门 + 职务**，三者只能由 fullAccess 管理员在「成员管理」中修改；
+普通成员在「我的资料」中只读展示，`PUT /api/my/profile` 的 DTO 已移除这三个字段（从接口层面杜绝自提权）。
+
 | 条件 | 可访问页面 |
 |------|-----------|
-| 会长/副会长/秘书处 | 全部 16 个页面（含账号管理、财务台账、操作日志、积分审核、成员管理、作业管理） |
+| 会长/副会长/秘书处 | 全部 17 个页面（含账号管理、财务台账、操作日志、积分审核、成员管理、作业管理、**届次管理**） |
 | 普通成员 | Dashboard、我的活动登记、积分总表、活动资料归档、会议纪要、我的资料、我的作业 |
 
 ### 作业模块权限（独立于 fullAccess）
 
-部长（`position = "部长"`）拥有独立的作业管理权限，但**不进入 fullAccess**：
+部长（`position = "部长"`）拥有独立的作业管理权限，但**不进入 fullAccess**；作业按届次绑定，核心规则是
+**「部长：届次可选、部门固定本部门；fullAccess：届次可选、部门可选」**：
 
 ```java
 PermissionChecker.isMinister()                   // "部长".equals(position)
@@ -78,13 +89,13 @@ PermissionChecker.canReviewSubmission(department) // fullAccess → 全部；部
 
 | 角色 | 我的作业 | 作业批改 | 作业管理 | 权限范围 |
 |------|---------|---------|---------|---------|
-| 普通成员 | ✅ | ❌ | ❌ | 仅自己的提交 |
-| 部长 | ✅ | ✅ | ✅ | 仅本部门 |
-| 秘书处/会长/副会长 | ✅ | ✅ | ✅ | 全部 |
+| 普通成员 | ✅（本人届次） | ❌ | ❌ | 仅自己的提交 |
+| 部长 | ✅（本人届次） | ✅ | ✅ | 届次可选，仅本部门 |
+| 秘书处/会长/副会长 | ✅ | ✅ | ✅ | 届次/部门皆可选（全部） |
 
 **后端关键类：**
 - `PermissionChecker.java` — 权限校验入口（`requireFullAccess()`, `requireFinanceAccess()`, `requireLogAccess()`, `requireUserManage()`；作业专用 `requireManageHomework()` / `requireReviewSubmission()`）
-- `ActorContext.java` — 每次请求实时从 Member 表构造，权限随 member 实时变化
+- `ActorContext.java` — 每次请求实时从 Member 表构造（含 `cohortId`/`cohortYear`），权限随 member 实时变化
 - `JwtAuthenticationInterceptor.java` — 拦截器，白名单 `["/api/auth/login", "/swagger-ui", "/v3/api-docs", "/h2-console", "/error"]`
 
 **前端关键文件：**
@@ -129,12 +140,14 @@ npm run dev
 | `lintao` | `123456` | 副会长，全权限，资料已完善 |
 | `LT` | `123456` | 普通社员，用于测试普通成员权限 |
 
-密码在 `DefaultAdminInitializer.java` 中设置，每次后端启动时重置 `lintao` 为 `123456`。
+系统不自动创建默认账号；上表为开发环境中已存在的测试账号。
 
 ## API 接口一览
 
 | 模块 | 端点 | 方法 |
 |------|------|------|
+| 届次 | `/api/cohorts` | GET / POST |
+| 届次 | `/api/cohorts/{id}` | PUT / DELETE |
 | 认证 | `/api/auth/login` | POST |
 | 认证 | `/api/auth/me` | GET |
 | 认证 | `/api/auth/me/password` | PUT |
@@ -196,6 +209,7 @@ npm run dev
 │   │   │   ├── OpenAtomClubApplication.java
 │   │   │   ├── archive/             # 归档链接模块
 │   │   │   ├── auth/                # 认证模块（controller/service/entity/dto/security/config）
+│   │   │   ├── cohort/              # 届次模块（entity/repository/dto/service/controller）
 │   │   │   ├── common/              # 公共模块（config/exception/response/security）
 │   │   │   ├── dashboard/           # 首页统计模块
 │   │   │   ├── file/                # 文件存储模块
@@ -207,7 +221,7 @@ npm run dev
 │   │   │   └── point/               # 积分系统模块（item/application/record/table）
 │   │   └── resources/
 │   │       ├── application.yml      # 主配置
-│   │       └── db/migration/        # Flyway 迁移（V1~V5）
+│   │       └── db/migration/        # Flyway 迁移（V1~V7；V6 届次基础 + V7 届次业务范围）
 │   └── test/                        # 测试
 ├── frontend/
 │   ├── package.json
@@ -216,14 +230,14 @@ npm run dev
 │   └── src/
 │       ├── main.tsx                 # 入口
 │       ├── App.tsx                  # Ant Design ConfigProvider + RouterProvider
-│       ├── router.tsx               # 路由定义（16 个路由）
+│       ├── router.tsx               # 路由定义（17 个路由）
 │       ├── api/                     # API 请求封装（axios 实例 + 各模块 API）
 │       ├── types/                   # TypeScript 类型定义
-│       ├── utils/                   # auth / permission / actor / download
-│       ├── components/              # 通用组件（AuthGuard, PermissionGuard, PageContainer, LoginStarfield...）
+│       ├── utils/                   # auth / permission / actor / download / cohort
+│       ├── components/              # 通用组件（AuthGuard, PermissionGuard, PageContainer, LoginStarfield, CohortSelect...）
 │       ├── layouts/
 │       │   └── MainLayout.tsx       # 主布局（侧边栏 + 顶栏 + 用户下拉菜单）
-│       ├── pages/                   # 16 个页面组件（含 homework/ 子目录 3 个作业页面）
+│       ├── pages/                   # 17 个页面组件（含 homework/ 子目录 3 个作业页面 + 届次管理）
 │       └── styles/                  # CSS 样式（login, dashboard, app-shell）
 └── query                            # 临时的 SQL 查询文件
 ```
@@ -285,15 +299,20 @@ const blob = await request.get(url, { responseType: 'blob' })
 
 ## 开发注意事项
 
-- **不要新增 role 表或 role 字段**，权限基于 `members.position` + `members.department`。
-- **作业模块权限**：部长拥有独立作业管理权限（`canManageHomework()`），但**不进入 fullAccess**；批改/下载附件需用 `canReviewSubmission(department)` 校验本部门范围。
+- **不要新增 role 表或 role 字段**，权限基于 `members.position` + `members.department`；届次只是数据归属维度，不改变 fullAccess 判定。
+- **作业模块权限**：部长拥有独立作业管理权限（`canManageHomework()`），但**不进入 fullAccess**；**部长跨届可管理、但仅限本部门**，fullAccess 跨届跨部门；批改/下载附件需用 `canReviewSubmission(department)` 校验本部门范围。
+- **届次查询参数约定**：`cohortId` 空=全部、`-1`=未分届、正数=指定届次（前端用 `Segmented`/`Select` 传 `-1` 表示未分届）。
+- **组织身份只能由管理员改**：届次/部门/职务只能通过 `PUT /api/members/{id}` 由 fullAccess 修改；`PUT /api/my/profile` 的 DTO 只含 name/studentNo/phone/major。
+- **届次显示**：统一 `cohortLabel(year)` → `"YYYY届"`；数据库存完整年份（`cohorts.year`），禁止存 `"2026届"` 或 `"26"`。
+- **关系表**：`point_item_cohorts`（0 条 = 全局适用）和 `archive_cohorts` 存多届，禁止用 `"2025,2026"` 字符串。
+- **作业届次校验**：`listMyHomework`/`getAssignment`/`submitHomework` 都按 `assignment.cohortId == actor.cohortId` 校验；部长管理走 `department == actor.department`（不限制届次）。
 - **不要将 H2 用作生产数据库**（仅测试用，`ddl-auto: validate` 确保 Flyway 管理全部 schema）。
 - **所有表统一使用 BIGINT IDENTITY 主键**。
 - **前端不要在后台页面使用玻璃拟态、霓虹光效或粒子特效**——后台保持简洁专业的白色/浅灰风格。
 - **登录页的视觉风格**（深蓝宇宙星空 + Canvas 星场 + 鼠标排斥扰动）是刻意设计，修改时注意保持一致。
 - **操作日志**由 `OperationLogService` 统一写入，新增敏感操作时务必记录。
 - **文件上传**通过 `FileStorageService` 统一管理，存储路径为 `./data/openatom-storage`。**文件下载/查看不经过 axios**，使用原生 `fetch`（见上方文件机制说明）。
-- **密码管理**：`DefaultAdminInitializer.java` 在每次后端启动时重置 `lintao` 密码为 `123456`，方便开发调试。
+- **密码管理**：系统不再内置默认账号；账号通过账号管理功能创建，密码由管理员设置（BCrypt 加密）。
 - **积分项目 API** (`GET /api/point-items`) 返回 `List`（非分页结构），前端 API 返回类型为 `PointItem[]`，不要再用 `.list` 访问。
 - **积分总表** (`PointRecordRepository`) 的统计查询需注意 `pointItemId` 可能为 NULL（手动加分记录），已用 `COALESCE` 和 `IS NOT NULL` 处理。
 - **前端 API 路径**：`/api/point-applications` 的 POST 对应提交登记（非 `/api/point-applications/submit`），前端用 `submitPointApplications` 封装。

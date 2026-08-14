@@ -15,4 +15,5 @@ public class MemberRequest {
     private String major;
     private String department;
     private String position;
+    private Long cohortId;
 }

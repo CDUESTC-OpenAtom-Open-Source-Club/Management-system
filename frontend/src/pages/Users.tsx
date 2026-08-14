@@ -1,13 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Drawer, Form, Input, message, Modal, Popconfirm, Space, Switch, Table, Tag, Typography } from 'antd'
+import { Button, Card, Drawer, Form, Input, message, Modal, Popconfirm, Segmented, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, FileAddOutlined, LockOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { batchCreateUsers, createUser, deleteUser, getUsers, resetUserPassword, updateUserEnabled } from '../api/user'
 import type { BatchCreateUsersResponse, UserAccountResponse } from '../api/auth'
+import { getCohorts } from '../api/cohort'
+import type { Cohort } from '../types/cohort'
+import CohortSelect from '../components/CohortSelect'
+import { cohortLabel } from '../utils/cohort'
 import { isFullAccess } from '../utils/auth'
 
 const { Text } = Typography
 const PAGE_SIZE_DEFAULT = 10
+const UNASSIGNED = 'unassigned'
 
 const Users: React.FC = () => {
   const [form] = Form.useForm()
@@ -19,6 +24,8 @@ const Users: React.FC = () => {
   const [page, setPage] = useState(1)
   const [size, setSize] = useState(PAGE_SIZE_DEFAULT)
   const [keyword, setKeyword] = useState('')
+  const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [activeCohort, setActiveCohort] = useState<string>('all')
   const [createOpen, setCreateOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [resetTarget, setResetTarget] = useState<UserAccountResponse | null>(null)
@@ -27,10 +34,16 @@ const Users: React.FC = () => {
   const [batchSubmitting, setBatchSubmitting] = useState(false)
   const canView = isFullAccess()
 
+  useEffect(() => {
+    getCohorts().then((list) => setCohorts(list))
+  }, [])
+
+  const cohortId = activeCohort === 'all' ? undefined : activeCohort === UNASSIGNED ? -1 : Number(activeCohort)
+
   const loadData = async (p = page, s = size, kw = keyword) => {
     setLoading(true)
     try {
-      const res = await getUsers({ page: p, size: s, keyword: kw || undefined })
+      const res = await getUsers({ page: p, size: s, keyword: kw || undefined, cohortId })
       setRecords(res.list ?? [])
       setTotal(res.total ?? 0)
       setPage(res.page || p)
@@ -47,7 +60,7 @@ const Users: React.FC = () => {
   const handleSearch = () => { void loadData(1, size, keyword.trim()) }
   const handleResetSearch = () => { setKeyword(''); void loadData(1, size, '') }
 
-  const handleCreate = async (values: { username: string; initialPassword: string; enabled?: boolean }) => {
+  const handleCreate = async (values: { username: string; initialPassword: string; cohortId: number; enabled?: boolean }) => {
     setCreateSubmitting(true)
     try {
       await createUser(values)
@@ -60,7 +73,7 @@ const Users: React.FC = () => {
     }
   }
 
-  const handleBatchCreate = async (values: { usernamesText: string; initialPassword: string }) => {
+  const handleBatchCreate = async (values: { usernamesText: string; initialPassword: string; cohortId: number }) => {
     const usernames = Array.from(new Set(
       values.usernamesText
         .split(/\r?\n/)
@@ -74,6 +87,7 @@ const Users: React.FC = () => {
     setBatchSubmitting(true)
     try {
       const res = await batchCreateUsers({
+        cohortId: values.cohortId,
         accounts: usernames.map((username) => ({ username, initialPassword: values.initialPassword })),
       })
       setBatchResult(res)
@@ -89,10 +103,6 @@ const Users: React.FC = () => {
   }
 
   const handleToggleEnabled = async (record: UserAccountResponse, enabled: boolean) => {
-    if (enabled === false && record.username === 'lintao') {
-      message.warning('当前用户不可被禁用')
-      return
-    }
     await updateUserEnabled(record.id, enabled)
     message.success('状态已更新')
     await loadData(page, size, keyword)
@@ -110,7 +120,6 @@ const Users: React.FC = () => {
   const handleDelete = async (record: UserAccountResponse) => {
     await deleteUser(record.id)
     message.success('账号已删除')
-    // 删除当前页最后一条且非第一页时，回退一页，避免停留在空页
     const nextPage = records.length === 1 && page > 1 ? page - 1 : page
     await loadData(nextPage, size, keyword)
   }
@@ -119,6 +128,7 @@ const Users: React.FC = () => {
     { title: '用户名', dataIndex: 'username', width: 140, fixed: 'left' },
     { title: '姓名', dataIndex: 'name', width: 120, render: (value) => value || '-' },
     { title: '学号', dataIndex: 'studentNo', width: 120, render: (value) => value || '-' },
+    { title: '届次', dataIndex: 'cohortYear', width: 90, render: (value) => cohortLabel(value) },
     { title: '联系电话', dataIndex: 'phone', width: 140, render: (value) => value || '-' },
     { title: '专业', dataIndex: 'major', width: 140, render: (value) => value || '-' },
     { title: '部门', dataIndex: 'department', width: 120, render: (value) => value || '-' },
@@ -149,6 +159,12 @@ const Users: React.FC = () => {
     return <Card><Text>无权限访问该页面。</Text></Card>
   }
 
+  const cohortSegments = [
+    { label: '全部', value: 'all' },
+    ...cohorts.map((c) => ({ label: `${c.year}届`, value: String(c.id) })),
+    { label: '未分届', value: UNASSIGNED },
+  ]
+
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Card>
@@ -169,6 +185,12 @@ const Users: React.FC = () => {
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建账号</Button>
           </Space>
         </Space>
+        <Segmented
+          value={activeCohort}
+          options={cohortSegments}
+          onChange={(v) => { setActiveCohort(v as string); void loadData(1, size, keyword) }}
+          style={{ marginTop: 12 }}
+        />
       </Card>
 
       <Card>
@@ -177,7 +199,7 @@ const Users: React.FC = () => {
           loading={loading}
           columns={columns}
           dataSource={records}
-          scroll={{ x: 1600 }}
+          scroll={{ x: 1700 }}
           pagination={{
             current: page,
             pageSize: size,
@@ -196,6 +218,9 @@ const Users: React.FC = () => {
           <Form.Item name="initialPassword" label="初始密码" rules={[{ required: true, message: '请输入初始密码' }, { min: 6, message: '至少 6 位' }]}>
             <Input.Password placeholder="初始密码" />
           </Form.Item>
+          <Form.Item name="cohortId" label="届次" rules={[{ required: true, message: '请选择届次' }]}>
+            <CohortSelect placeholder="请选择届次" />
+          </Form.Item>
           <Form.Item name="enabled" label="是否启用" valuePropName="checked">
             <Switch />
           </Form.Item>
@@ -208,6 +233,9 @@ const Users: React.FC = () => {
 
       <Drawer title="批量创建账号" open={batchOpen} width={560} onClose={() => { setBatchOpen(false); setBatchResult(null); batchForm.resetFields() }} destroyOnClose>
         <Form form={batchForm} layout="vertical" onFinish={handleBatchCreate}>
+          <Form.Item name="cohortId" label="届次" rules={[{ required: true, message: '请选择届次' }]}>
+            <CohortSelect placeholder="请选择届次" />
+          </Form.Item>
           <Form.Item name="usernamesText" label="用户名列表" rules={[{ required: true, message: '请按行输入用户名' }]}>
             <Input.TextArea rows={8} placeholder="每行一个用户名" />
           </Form.Item>

@@ -34,17 +34,17 @@ public class DashboardService {
     private final OperationLogRepository operationLogRepository;
     private final UserAccountRepository userAccountRepository;
 
-    public DashboardStatsResponse getStats() {
+    public DashboardStatsResponse getStats(Long cohortId) {
         // 基础统计
-        long totalMembers = memberRepository.countByDeletedAtIsNull();
+        long totalMembers = countMembersByCohort(cohortId);
         long totalPointItems = pointItemRepository.countByDeletedAtIsNull();
-        long pendingApplications = pointApplicationRepository.countByStatusAndDeletedAtIsNull("PENDING");
+        long pendingApplications = pointApplicationRepository.countByStatusAndCohortIdAndDeletedAtIsNull("PENDING", cohortId);
         long totalArchiveLinks = archiveLinkRepository.countByDeletedAtIsNull();
         long totalMeetingMinutes = meetingMinutesRepository.countByDeletedAtIsNull();
         long totalFinancePeriods = financePeriodRepository.count();
 
         // 部门分布
-        List<Object[]> deptRows = memberRepository.countGroupByDepartment();
+        List<Object[]> deptRows = memberRepository.countGroupByDepartmentByCohort(cohortId);
         List<DashboardStatsResponse.DepartmentStat> departmentDistribution = new ArrayList<>();
         for (Object[] row : deptRows) {
             String label = (String) row[0];
@@ -55,7 +55,7 @@ public class DashboardService {
         }
 
         // 近 7 周积分登记趋势
-        List<DashboardStatsResponse.WeeklyTrend> weeklyTrend = buildWeeklyTrend();
+        List<DashboardStatsResponse.WeeklyTrend> weeklyTrend = buildWeeklyTrend(cohortId);
 
         // 待办事项
         long incompleteProfileCount = userAccountRepository.countByProfileCompletedAndDeletedAtIsNull(false);
@@ -98,7 +98,7 @@ public class DashboardService {
                 .build();
     }
 
-    private List<DashboardStatsResponse.WeeklyTrend> buildWeeklyTrend() {
+    private List<DashboardStatsResponse.WeeklyTrend> buildWeeklyTrend(Long cohortId) {
         List<DashboardStatsResponse.WeeklyTrend> trend = new ArrayList<>();
         LocalDate today = LocalDate.now();
         for (int i = 6; i >= 0; i--) {
@@ -106,13 +106,19 @@ public class DashboardService {
             LocalDate weekEnd = weekStart.plusDays(6);
             OffsetDateTime start = weekStart.atStartOfDay().atOffset(OffsetDateTime.now().getOffset());
             OffsetDateTime end = weekEnd.plusDays(1).atStartOfDay().atOffset(OffsetDateTime.now().getOffset());
-            long count = pointApplicationRepository.countByCreatedAtBetweenAndDeletedAtIsNull(start, end);
+            long count = pointApplicationRepository.countByCreatedAtBetweenAndCohortIdAndDeletedAtIsNull(start, end, cohortId);
             trend.add(DashboardStatsResponse.WeeklyTrend.builder()
                     .week(7 - i)
                     .count(count)
                     .build());
         }
         return trend;
+    }
+
+    private long countMembersByCohort(Long cohortId) {
+        if (cohortId == null) return memberRepository.countByDeletedAtIsNull();
+        if (cohortId == -1) return memberRepository.countByCohortId(null);
+        return memberRepository.countByCohortId(cohortId);
     }
 
     private String formatRelativeTime(OffsetDateTime time) {

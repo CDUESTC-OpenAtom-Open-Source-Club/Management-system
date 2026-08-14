@@ -9,7 +9,10 @@ import PageContainer from '../components/PageContainer'
 import {
   getPointItems, createPointItem, updatePointItem, deletePointItem,
 } from '../api/point'
-import type { PointItem } from '../types/point'
+import { getCohorts } from '../api/cohort'
+import type { PointItem, PointItemForm } from '../types/point'
+import type { Cohort } from '../types/cohort'
+import { cohortLabel } from '../utils/cohort'
 import { canManage } from '../utils/permission'
 
 const ITEM_TYPE_OPTIONS = ['活动', '会议', '任务', '其他']
@@ -20,7 +23,8 @@ const PointItems: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<PointItem | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [form] = Form.useForm<Partial<PointItem>>()
+  const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [form] = Form.useForm<PointItemForm>()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -33,17 +37,21 @@ const PointItems: React.FC = () => {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { getCohorts().then(setCohorts) }, [])
 
   const handleAdd = () => {
     setEditing(null)
     form.resetFields()
-    form.setFieldsValue({ enabled: true, allowMemberApply: true, sortOrder: 0 })
+    form.setFieldsValue({ enabled: true, allowMemberApply: true, sortOrder: 0, cohortIds: [] })
     setModalOpen(true)
   }
 
   const handleEdit = (record: PointItem) => {
     setEditing(record)
-    form.setFieldsValue(record)
+    form.setFieldsValue({
+      ...record,
+      cohortIds: record.cohorts?.map((c) => c.id) ?? [],
+    })
     setModalOpen(true)
   }
 
@@ -89,6 +97,13 @@ const PointItems: React.FC = () => {
     {
       title: '允许登记', dataIndex: 'allowMemberApply', width: 90,
       render: (v: boolean) => <Tag color={v ? 'blue' : 'default'}>{v ? '允许' : '不允许'}</Tag>
+    },
+    {
+      title: '适用届次', dataIndex: 'cohorts', width: 160,
+      render: (cohorts: Cohort[] | undefined) =>
+        !cohorts || cohorts.length === 0
+          ? <Tag>全局</Tag>
+          : cohorts.map((c) => <Tag key={c.id}>{cohortLabel(c.year)}</Tag>),
     },
     canManage() ? {
       title: '操作', width: 140,
@@ -176,6 +191,14 @@ const PointItems: React.FC = () => {
           </Form.Item>
           <Form.Item label="允许成员登记" name="allowMemberApply" valuePropName="checked">
             <Switch checkedChildren="允许" unCheckedChildren="不允许" />
+          </Form.Item>
+          <Form.Item label="适用届次" name="cohortIds" extra="留空表示全局适用">
+            <Select
+              mode="multiple"
+              allowClear
+              placeholder="留空表示全局适用"
+              options={cohorts.map((c) => ({ label: `${c.year}届`, value: c.id }))}
+            />
           </Form.Item>
         </Form>
       </Modal>

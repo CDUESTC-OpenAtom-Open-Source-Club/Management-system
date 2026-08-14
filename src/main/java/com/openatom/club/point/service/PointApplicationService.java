@@ -12,8 +12,10 @@ import com.openatom.club.point.dto.PointApplicationSubmitRequest;
 import com.openatom.club.point.dto.RejectRequest;
 import com.openatom.club.point.entity.PointApplication;
 import com.openatom.club.point.entity.PointItem;
+import com.openatom.club.point.entity.PointItemCohort;
 import com.openatom.club.point.entity.PointRecord;
 import com.openatom.club.point.repository.PointApplicationRepository;
+import com.openatom.club.point.repository.PointItemCohortRepository;
 import com.openatom.club.point.repository.PointItemRepository;
 import com.openatom.club.point.repository.PointRecordRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,7 @@ import java.util.List;
 public class PointApplicationService {
     private final PointApplicationRepository applicationRepository;
     private final PointItemRepository pointItemRepository;
+    private final PointItemCohortRepository pointItemCohortRepository;
     private final PointRecordRepository pointRecordRepository;
     private final MemberRepository memberRepository;
     private final PermissionChecker permissionChecker;
@@ -39,7 +42,11 @@ public class PointApplicationService {
 
     @Transactional
     public List<PointApplicationResponse> submit(PointApplicationSubmitRequest req) {
-        Member member = memberRepository.findByIdAndDeletedAtIsNull(req.getMemberId())
+        Long memberId = ActorHolder.get().getMemberId();
+        if (memberId == null) {
+            throw BizException.of("当前账号未绑定成员资料");
+        }
+        Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
                 .orElseThrow(() -> BizException.of("成员不存在"));
         List<PointApplication> results = new ArrayList<>();
         for (Long itemId : req.getPointItemIds()) {
@@ -47,10 +54,11 @@ public class PointApplicationService {
                     .orElseThrow(() -> BizException.of("积分项目不存在: " + itemId));
             if (!item.getEnabled()) throw BizException.of("积分项目已禁用: " + item.getItemName());
             if (!item.getAllowMemberApply()) throw BizException.of("该项目不允许成员自行登记: " + item.getItemName());
-            List<PointApplication> existing = applicationRepository.findActiveByMemberAndItem(req.getMemberId(), itemId);
+            if (!isApplicable(item, member.getCohortId())) throw BizException.of("该项目不适用于你的届次: " + item.getItemName());
+            List<PointApplication> existing = applicationRepository.findActiveByMemberAndItem(memberId, itemId);
             if (!existing.isEmpty()) throw BizException.of("已提交或已通过: " + item.getItemName());
             PointApplication app = new PointApplication();
-            app.setMemberId(req.getMemberId());
+            app.setMemberId(memberId);
             app.setPointItemId(itemId);
             app.setStatus("PENDING");
             results.add(applicationRepository.save(app));
@@ -58,7 +66,9 @@ public class PointApplicationService {
         return results.stream().map(PointApplicationResponse::from).toList();
     }
 
-    public List<PointApplicationResponse> myApplications(Long memberId) {
+    public List<PointApplicationResponse> myApplications() {
+        Long memberId = ActorHolder.get().getMemberId();
+        if (memberId == null) return List.of();
         return applicationRepository.findAllByMemberIdAndDeletedAtIsNull(memberId)
                 .stream().map(app -> {
                     PointApplicationResponse dto = PointApplicationResponse.from(app);
@@ -70,10 +80,11 @@ public class PointApplicationService {
                 }).toList();
     }
 
-    public PageResult<PointApplicationResponse> listAll(String status, String keyword, int page, int size) {
+    public PageResult<PointApplicationResponse> listAll(String status, Long cohortId, String keyword, int page, int size) {
         permissionChecker.requireManage();
         Page<PointApplication> appPage = applicationRepository.searchApplications(
                 StringUtils.hasText(status) ? status : null,
+                cohortId,
                 StringUtils.hasText(keyword) ? keyword : null,
                 PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createdAt"))
         );
@@ -134,5 +145,11 @@ public class PointApplicationService {
         applicationRepository.save(app);
         logService.log("point_application", "REJECT", String.valueOf(id),
                 "驳回登记 #" + id + "，原因: " + req.getReviewComment());
+    }
+
+    private boolean isApplicable(PointItem item, Long cohortId) {
+        List<PointItemCohort> links = pointItemCohortRepository.findByPointItemId(item.getId());
+        if (links.isEmpty()) return true; // 全局适用
+        return cohortId != null && links.stream().anyMatch(l -> l.getCohortId().equals(cohortId));
     }
 }

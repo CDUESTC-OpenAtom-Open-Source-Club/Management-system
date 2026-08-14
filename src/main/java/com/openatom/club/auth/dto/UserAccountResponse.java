@@ -17,6 +17,8 @@ public class UserAccountResponse {
     private String major;
     private String department;
     private String position;
+    private Long cohortId;
+    private Integer cohortYear;
     private Boolean enabled;
     private Boolean profileCompleted;
     private Boolean initialPasswordChanged;

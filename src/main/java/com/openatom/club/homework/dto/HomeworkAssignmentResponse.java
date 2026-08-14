@@ -12,6 +12,8 @@ public class HomeworkAssignmentResponse {
     private String description;
     private String targetType;
     private String targetDepartment;
+    private Long cohortId;
+    private Integer cohortYear;
     private OffsetDateTime deadline;
     private String status;
     private BigDecimal maxPoints;
@@ -32,6 +34,7 @@ public class HomeworkAssignmentResponse {
         r.description = a.getDescription();
         r.targetType = a.getTargetType();
         r.targetDepartment = a.getTargetDepartment();
+        r.cohortId = a.getCohortId();
         r.deadline = a.getDeadline();
         r.status = a.getStatus();
         r.maxPoints = a.getMaxPoints();

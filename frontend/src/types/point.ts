@@ -1,3 +1,5 @@
+import type { Cohort } from './cohort'
+
 export interface PointItem {
   id: number
   itemName: string
@@ -7,7 +9,19 @@ export interface PointItem {
   sortOrder: number
   enabled: boolean
   allowMemberApply: boolean
+  cohorts?: Cohort[]
   createdAt?: string
+}
+
+export interface PointItemForm {
+  itemName: string
+  pointValue: number
+  itemType?: string
+  description?: string
+  sortOrder?: number
+  enabled?: boolean
+  allowMemberApply?: boolean
+  cohortIds?: number[]
 }
 
 export interface PointApplication {

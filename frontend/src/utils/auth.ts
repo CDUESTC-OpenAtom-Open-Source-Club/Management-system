@@ -13,6 +13,8 @@ export interface CurrentUser {
   major?: string
   department?: string
   position?: string
+  cohortId?: number | null
+  cohortYear?: number | null
   fullAccess?: boolean
   profileCompleted?: boolean
   initialPasswordChanged?: boolean

@@ -39,9 +39,10 @@ public class AuthController {
 
     @GetMapping("/api/users")
     public ApiResponse<PageResult<UserAccountResponse>> listUsers(@RequestParam(required = false) String keyword,
+                                                                  @RequestParam(required = false) Long cohortId,
                                                                   @RequestParam(defaultValue = "1") int page,
                                                                   @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.success(authService.listUsers(keyword, page, size));
+        return ApiResponse.success(authService.listUsers(keyword, cohortId, page, size));
     }
 
     @PostMapping("/api/users")

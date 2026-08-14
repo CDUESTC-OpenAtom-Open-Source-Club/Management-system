@@ -23,6 +23,10 @@ public class ActorContext {
     private String department;
     private String position;
 
+    // 届次归属（每次请求从 member 实时读取）
+    private Long cohortId;
+    private Integer cohortYear;
+
     /** 兼容旧构造方式（仅 name/department/position） */
     public ActorContext(String name, String department, String position) {
         this.name = name;

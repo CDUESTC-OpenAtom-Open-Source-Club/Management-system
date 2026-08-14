@@ -1,9 +1,11 @@
 package com.openatom.club.point.dto;
 
+import com.openatom.club.cohort.dto.CohortResponse;
 import com.openatom.club.point.entity.PointItem;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Data
 public class PointItemResponse {
@@ -15,6 +17,7 @@ public class PointItemResponse {
     private Integer sortOrder;
     private Boolean enabled;
     private Boolean allowMemberApply;
+    private List<CohortResponse> cohorts;
     private String createdBy;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

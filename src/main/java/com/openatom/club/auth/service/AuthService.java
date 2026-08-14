@@ -4,6 +4,8 @@ import com.openatom.club.auth.dto.*;
 import com.openatom.club.auth.entity.UserAccount;
 import com.openatom.club.auth.repository.UserAccountRepository;
 import com.openatom.club.auth.security.JwtTokenProvider;
+import com.openatom.club.cohort.entity.Cohort;
+import com.openatom.club.cohort.repository.CohortRepository;
 import com.openatom.club.common.exception.PermissionDeniedException;
 import com.openatom.club.common.response.PageResult;
 import com.openatom.club.common.security.ActorHolder;
@@ -23,6 +25,8 @@ import org.springframework.util.StringUtils;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -31,6 +35,7 @@ public class AuthService {
 
     private final UserAccountRepository userRepo;
     private final MemberRepository memberRepo;
+    private final CohortRepository cohortRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final OperationLogService logService;
@@ -70,11 +75,18 @@ public class AuthService {
         logService.log("auth", "UPDATE", String.valueOf(userId), "修改密码");
     }
 
-    public PageResult<UserAccountResponse> listUsers(String keyword, int page, int size) {
+    /**
+     * @param cohortId null=全部；-1=未分届；其他=指定届次
+     */
+    public PageResult<UserAccountResponse> listUsers(String keyword, Long cohortId, int page, int size) {
         permissionChecker.requireUserManage();
-        Page<UserAccount> pg = userRepo.searchUsers(StringUtils.hasText(keyword) ? keyword.trim() : null,
+        Page<UserAccount> pg = userRepo.searchUsers(
+                StringUtils.hasText(keyword) ? keyword.trim() : null,
+                cohortId,
                 PageRequest.of(Math.max(page - 1, 0), size));
-        List<UserAccountResponse> list = pg.getContent().stream().map(this::toUserResponse).toList();
+        Map<Long, Integer> years = cohortYearMap();
+        List<UserAccountResponse> list = pg.getContent().stream()
+                .map(u -> toUserResponse(u, years)).toList();
         return new PageResult<>(list, pg.getTotalElements(), page, size);
     }
 
@@ -83,10 +95,11 @@ public class AuthService {
         permissionChecker.requireUserManage();
         String username = normalizeUsername(req.getUsername());
         validateNewPassword(req.getInitialPassword(), "初始密码");
+        requireActiveCohort(req.getCohortId());
         if (userRepo.existsByUsernameAndDeletedAtIsNull(username)) {
             throw new IllegalArgumentException("用户名已存在");
         }
-        Member member = createDefaultMember(username);
+        Member member = createDefaultMember(username, req.getCohortId());
         UserAccount user = new UserAccount();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(req.getInitialPassword()));
@@ -95,13 +108,15 @@ public class AuthService {
         user.setProfileCompleted(false);
         user.setInitialPasswordChanged(false);
         user = userRepo.save(user);
-        logService.log("auth", "CREATE", String.valueOf(user.getId()), "创建账号 " + username);
-        return toUserResponse(user);
+        logService.log("auth", "CREATE", String.valueOf(user.getId()),
+                "创建账号 " + username + "（" + cohortLabel(req.getCohortId()) + "）");
+        return toUserResponse(user, cohortYearMap());
     }
 
     @Transactional
     public BatchCreateUsersResponse batchCreateUsers(BatchCreateUsersRequest req) {
         permissionChecker.requireUserManage();
+        requireActiveCohort(req.getCohortId());
         List<BatchCreateUsersResponse.BatchCreateSuccessItem> created = new ArrayList<>();
         List<BatchCreateUsersResponse.BatchCreateFailedItem> failed = new ArrayList<>();
         if (req.getAccounts() == null) {
@@ -114,7 +129,7 @@ public class AuthService {
                 if (userRepo.existsByUsernameAndDeletedAtIsNull(username)) {
                     throw new IllegalArgumentException("用户名已存在");
                 }
-                Member member = createDefaultMember(username);
+                Member member = createDefaultMember(username, req.getCohortId());
                 UserAccount user = new UserAccount();
                 user.setUsername(username);
                 user.setPasswordHash(passwordEncoder.encode(item.getInitialPassword()));
@@ -127,7 +142,8 @@ public class AuthService {
                         .username(username)
                         .memberId(member.getId())
                         .build());
-                logService.log("auth", "CREATE", String.valueOf(user.getId()), "批量创建账号 " + username);
+                logService.log("auth", "CREATE", String.valueOf(user.getId()),
+                        "批量创建账号 " + username + "（" + cohortLabel(req.getCohortId()) + "）");
             } catch (Exception e) {
                 failed.add(BatchCreateUsersResponse.BatchCreateFailedItem.builder()
                         .username(item == null ? null : item.getUsername())
@@ -179,21 +195,11 @@ public class AuthService {
     public CurrentUserResponse updateMyProfile(Long userId, UpdateMyProfileRequest req) {
         UserAccount user = findUser(userId);
         Member member = getRequiredMember(user);
-        boolean fullAccess = isFullAccess(member);
-        if (!fullAccess) {
-            if ("秘书处".equals(req.getDepartment())) {
-                throw new IllegalArgumentException("普通成员不能将部门修改为秘书处");
-            }
-            if ("会长".equals(req.getPosition()) || "副会长".equals(req.getPosition())) {
-                throw new IllegalArgumentException("普通成员不能将职务修改为会长或副会长");
-            }
-        }
+        // 组织身份（届次/部门/职务）不在此接口内修改，仅维护个人资料
         member.setName(req.getName());
         member.setStudentNo(req.getStudentNo());
         member.setPhone(req.getPhone());
         member.setMajor(req.getMajor());
-        member.setDepartment(req.getDepartment());
-        member.setPosition(req.getPosition());
         memberRepo.save(member);
         user.setProfileCompleted(true);
         userRepo.save(user);
@@ -208,6 +214,7 @@ public class AuthService {
     public CurrentUserResponse buildCurrentUser(UserAccount user) {
         Member member = getMember(user);
         boolean full = isFullAccess(member);
+        Long cohortId = member != null ? member.getCohortId() : null;
         return CurrentUserResponse.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
@@ -218,6 +225,8 @@ public class AuthService {
                 .major(member != null ? member.getMajor() : null)
                 .department(member != null ? member.getDepartment() : null)
                 .position(member != null ? member.getPosition() : null)
+                .cohortId(cohortId)
+                .cohortYear(cohortId == null ? null : cohortYear(cohortId))
                 .fullAccess(full)
                 .profileCompleted(Boolean.TRUE.equals(user.getProfileCompleted()))
                 .initialPasswordChanged(Boolean.TRUE.equals(user.getInitialPasswordChanged()))
@@ -245,7 +254,7 @@ public class AuthService {
         return m != null && ("会长".equals(m.getPosition()) || "副会长".equals(m.getPosition()) || "秘书处".equals(m.getDepartment()));
     }
 
-    private Member createDefaultMember(String username) {
+    private Member createDefaultMember(String username, Long cohortId) {
         Member m = new Member();
         m.setName(username);
         m.setStudentNo(username);
@@ -253,11 +262,13 @@ public class AuthService {
         m.setMajor("");
         m.setDepartment("其他");
         m.setPosition("社员");
+        m.setCohortId(cohortId);
         return memberRepo.save(m);
     }
 
-    private UserAccountResponse toUserResponse(UserAccount u) {
+    private UserAccountResponse toUserResponse(UserAccount u, Map<Long, Integer> years) {
         Member m = getMember(u);
+        Long cohortId = m != null ? m.getCohortId() : null;
         return UserAccountResponse.builder()
                 .id(u.getId())
                 .username(u.getUsername())
@@ -268,12 +279,37 @@ public class AuthService {
                 .major(m != null ? m.getMajor() : null)
                 .department(m != null ? m.getDepartment() : null)
                 .position(m != null ? m.getPosition() : null)
+                .cohortId(cohortId)
+                .cohortYear(cohortId == null ? null : years.get(cohortId))
                 .enabled(Boolean.TRUE.equals(u.getEnabled()))
                 .profileCompleted(Boolean.TRUE.equals(u.getProfileCompleted()))
                 .initialPasswordChanged(Boolean.TRUE.equals(u.getInitialPasswordChanged()))
                 .lastLoginAt(u.getLastLoginAt())
                 .createdAt(u.getCreatedAt())
                 .build();
+    }
+
+    private void requireActiveCohort(Long cohortId) {
+        Cohort cohort = cohortRepository.findByIdAndDeletedAtIsNull(cohortId)
+                .orElseThrow(() -> new IllegalArgumentException("届次不存在"));
+        if (!Boolean.TRUE.equals(cohort.getEnabled())) {
+            throw new IllegalArgumentException("届次已停用，不能分配给新账号");
+        }
+    }
+
+    private Integer cohortYear(Long cohortId) {
+        if (cohortId == null) return null;
+        return cohortRepository.findByIdAndDeletedAtIsNull(cohortId).map(Cohort::getYear).orElse(null);
+    }
+
+    private String cohortLabel(Long cohortId) {
+        Integer y = cohortYear(cohortId);
+        return y == null ? "未分届" : y + "届";
+    }
+
+    private Map<Long, Integer> cohortYearMap() {
+        return cohortRepository.findAllByDeletedAtIsNullOrderByYearDesc().stream()
+                .collect(Collectors.toMap(Cohort::getId, Cohort::getYear));
     }
 
     private String normalizeUsername(String username) {

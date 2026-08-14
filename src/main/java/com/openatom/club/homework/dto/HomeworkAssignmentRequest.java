@@ -19,6 +19,9 @@ public class HomeworkAssignmentRequest {
 
     private String targetDepartment;
 
+    @NotNull(message = "届次不能为空")
+    private Long cohortId;
+
     @NotNull(message = "截止时间不能为空")
     private OffsetDateTime deadline;
 

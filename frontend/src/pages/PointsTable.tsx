@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Table, Input, Button, Space, Tag, Modal, Form,
   InputNumber, Select, DatePicker, Popconfirm, message,
-  Typography, Card, Alert,
+  Typography, Card, Alert, Segmented,
 } from 'antd'
 import {
   SearchOutlined, AimOutlined, LeftOutlined, RightOutlined,
@@ -22,9 +22,12 @@ import type {
   PointRecord, PointRecordForm,
 } from '../types/point'
 import type { PointItem } from '../types/point'
+import { getCohorts } from '../api/cohort'
+import type { Cohort } from '../types/cohort'
 import { canManage } from '../utils/permission'
 
 const { Text } = Typography
+const UNASSIGNED = 'unassigned'
 
 const PointsTable: React.FC = () => {
   // ─── 积分总表 ────────────────────────────────────────────
@@ -36,6 +39,8 @@ const PointsTable: React.FC = () => {
   const [pageSize] = useState(50)
   const [keyword, setKeyword] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [activeCohort, setActiveCohort] = useState<string | null>(null)
 
   // ─── 搜索定位 ────────────────────────────────────────────
   const [locateKeyword, setLocateKeyword] = useState('')
@@ -64,22 +69,30 @@ const PointsTable: React.FC = () => {
   const [editRecordForm] = Form.useForm<PointRecordForm>()
   const [editSubmitting, setEditSubmitting] = useState(false)
 
+  const cohortId = activeCohort === null ? undefined : activeCohort === UNASSIGNED ? -1 : Number(activeCohort)
+
   const fetchTable = useCallback(async (targetPage = page) => {
+    if (activeCohort === null) return
     setLoading(true)
     try {
-      const res = await getPointsTable({ page: targetPage, size: pageSize, keyword })
+      const res = await getPointsTable({ page: targetPage, size: pageSize, keyword, cohortId })
       setColumns(res.columns ?? [])
       setRows(res.rows ?? [])
       setTotal(res.total ?? 0)
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, keyword])
+  }, [page, pageSize, keyword, cohortId, activeCohort])
 
   useEffect(() => { fetchTable() }, [fetchTable])
 
   useEffect(() => {
     getPointItems().then((res) => setPointItems(res ?? []))
+    getCohorts().then((list) => {
+      setCohorts(list)
+      const latest = list.find((c) => c.enabled)
+      setActiveCohort(latest ? String(latest.id) : UNASSIGNED)
+    })
   }, [])
 
   // ─── 搜索定位 ────────────────────────────────────────────
@@ -91,6 +104,7 @@ const PointsTable: React.FC = () => {
         keyword: locateKeyword,
         pageSize,
         matchIndex: idx,
+        cohortId,
       })
       setLocateResult(res)
       setMatchIndex(idx)
@@ -103,7 +117,7 @@ const PointsTable: React.FC = () => {
     } finally {
       setLocating(false)
     }
-  }, [locateKeyword, pageSize, page, fetchTable])
+  }, [locateKeyword, pageSize, page, fetchTable, cohortId])
 
   const handleLocateSearch = () => {
     if (!locateInput.trim()) { message.warning('请输入搜索关键词'); return }
@@ -301,6 +315,16 @@ const PointsTable: React.FC = () => {
 
   return (
     <PageContainer title="积分总表">
+      <Segmented
+        value={activeCohort ?? undefined}
+        options={[
+          ...cohorts.map((c) => ({ label: `${c.year}届`, value: String(c.id) })),
+          { label: '未分届', value: UNASSIGNED },
+        ]}
+        onChange={(v) => { setActiveCohort(v as string); setPage(1) }}
+        style={{ marginBottom: 16 }}
+      />
+
       {/* 搜索定位 */}
       <Card style={{ marginBottom: 16 }}>
         <Space wrap>
