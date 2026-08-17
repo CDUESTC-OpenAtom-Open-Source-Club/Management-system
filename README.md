@@ -147,14 +147,15 @@ boolean fullAccess = "会长".equals(position)
 
 ## 前端页面
 
-系统已完成全部 16 个前端页面：
+系统已完成全部 17 个前端页面：
 
 | 路由 | 页面 | 权限 |
 |------|------|------|
 | `/login` | 登录页（深蓝宇宙星空 + Canvas 动态星场） | 公开 |
 | `/` | Dashboard 首页概览（真实统计数据） | 登录即可 |
-| `/members` | 成员管理（CRUD + 分页搜索） | 全权限 |
-| `/point-items` | 积分项目管理（CRUD + 启用/禁用） | 全权限 |
+| `/members` | 成员管理（CRUD + 分页搜索 + 批量设置届次/批量删除） | 全权限 |
+| `/cohorts` | 届次管理（届次 CRUD） | 全权限 |
+| `/point-items` | 积分项目管理（CRUD + 启用/禁用，6 类类型） | 全权限 |
 | `/my-applications` | 我的活动登记（选择成员 + 多选提交） | 登录即可 |
 | `/point-applications` | 积分审核（通过/驳回 + 分页筛选） | 全权限 |
 | `/points-table` | 积分总表（动态列 + 排名 + 搜索定位 + 明细管理） | 登录即可 |
@@ -198,6 +199,8 @@ boolean fullAccess = "会长".equals(position)
 | 我的资料 | `/api/my/profile` | GET / PUT |
 | 成员管理 | `/api/members` | GET / POST |
 | 成员管理 | `/api/members/{id}` | GET / PUT / DELETE |
+| 成员管理 | `/api/members/batch-cohort` | PUT |
+| 成员管理 | `/api/members/batch-delete` | POST |
 | 积分项目 | `/api/point-items` | GET / POST |
 | 积分项目 | `/api/point-items/{id}` | PUT / DELETE |
 | 积分申请 | `/api/point-applications` | GET / POST |

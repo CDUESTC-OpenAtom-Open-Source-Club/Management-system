@@ -14,8 +14,7 @@ import type { PointItem, PointItemForm } from '../types/point'
 import type { Cohort } from '../types/cohort'
 import { cohortLabel } from '../utils/cohort'
 import { canManage } from '../utils/permission'
-
-const ITEM_TYPE_OPTIONS = ['活动', '会议', '任务', '其他']
+import { POINT_ITEM_TYPES } from '../utils/pointItemTypes'
 
 const PointItems: React.FC = () => {
   const [loading, setLoading] = useState(false)
@@ -176,7 +175,7 @@ const PointItems: React.FC = () => {
           <Form.Item label="类型" name="itemType">
             <Select
               placeholder="请选择类型"
-              options={ITEM_TYPE_OPTIONS.map((t) => ({ label: t, value: t }))}
+              options={POINT_ITEM_TYPES.map((t) => ({ label: t, value: t }))}
               allowClear
             />
           </Form.Item>

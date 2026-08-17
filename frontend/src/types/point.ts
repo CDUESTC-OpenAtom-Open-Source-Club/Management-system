@@ -1,10 +1,11 @@
 import type { Cohort } from './cohort'
+import type { PointItemType } from '../utils/pointItemTypes'
 
 export interface PointItem {
   id: number
   itemName: string
   pointValue: number
-  itemType: string
+  itemType: PointItemType
   description: string
   sortOrder: number
   enabled: boolean
@@ -16,7 +17,7 @@ export interface PointItem {
 export interface PointItemForm {
   itemName: string
   pointValue: number
-  itemType?: string
+  itemType?: PointItemType
   description?: string
   sortOrder?: number
   enabled?: boolean
@@ -47,7 +48,7 @@ export interface PointRecord {
   applicationId?: number
   score: number
   reason: string
-  sourceType: 'APPLICATION' | 'MANUAL'
+  sourceType: 'APPLICATION' | 'MANUAL' | 'HOMEWORK'
   operatorName?: string
   occurredAt?: string
   createdAt?: string

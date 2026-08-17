@@ -7,6 +7,7 @@ import com.openatom.club.common.exception.BizException;
 import com.openatom.club.common.security.ActorHolder;
 import com.openatom.club.common.security.PermissionChecker;
 import com.openatom.club.log.service.OperationLogService;
+import com.openatom.club.point.PointItemTypes;
 import com.openatom.club.point.dto.PointItemRequest;
 import com.openatom.club.point.dto.PointItemResponse;
 import com.openatom.club.point.entity.PointItem;
@@ -53,7 +54,7 @@ public class PointItemService {
         PointItem item = new PointItem();
         item.setItemName(req.getItemName());
         item.setPointValue(req.getPointValue());
-        item.setItemType(StringUtils.hasText(req.getItemType()) ? req.getItemType() : "其他");
+        item.setItemType(normalizeItemType(req.getItemType()));
         item.setDescription(req.getDescription());
         item.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : 0);
         item.setEnabled(req.getEnabled() != null ? req.getEnabled() : true);
@@ -74,7 +75,7 @@ public class PointItemService {
                 .orElseThrow(() -> BizException.of("积分项目不存在"));
         item.setItemName(req.getItemName());
         item.setPointValue(req.getPointValue());
-        if (StringUtils.hasText(req.getItemType())) item.setItemType(req.getItemType());
+        if (StringUtils.hasText(req.getItemType())) item.setItemType(normalizeItemType(req.getItemType()));
         if (req.getDescription() != null) item.setDescription(req.getDescription());
         if (req.getSortOrder() != null) item.setSortOrder(req.getSortOrder());
         if (req.getEnabled() != null) item.setEnabled(req.getEnabled());
@@ -99,6 +100,17 @@ public class PointItemService {
         pointItemCohortRepository.deleteByPointItemId(id);
         logService.log("point_item", "DELETE", String.valueOf(id),
                 "删除积分项目: " + item.getItemName());
+    }
+
+    private String normalizeItemType(String type) {
+        String t = type == null ? "" : type.trim();
+        if (t.isEmpty()) {
+            return PointItemTypes.OTHER;
+        }
+        if (!PointItemTypes.isValid(t)) {
+            throw BizException.of("非法的积分项目类型: " + t);
+        }
+        return t;
     }
 
     private boolean isApplicable(PointItem item, Long cohortId) {

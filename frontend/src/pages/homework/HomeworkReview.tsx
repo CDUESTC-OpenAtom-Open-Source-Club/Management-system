@@ -40,6 +40,11 @@ const HomeworkReview: React.FC = () => {
     try {
       const data = await listAssignments({ page: 1, size: 100, cohortId })
       setAssignments(data.list)
+      // 批改后实时刷新选中作业的计数（工作台统计）
+      setSelectedAssignment((prev) => {
+        if (!prev) return prev
+        return data.list.find((a) => a.id === prev.id) ?? prev
+      })
     } catch { /* handled */ } finally { setLoading(false) }
   }, [cohortId])
 
@@ -57,8 +62,9 @@ const HomeworkReview: React.FC = () => {
 
   const handleOpenGrade = async (sub: HomeworkSubmission) => {
     setCurrentSubmission(sub)
+    gradeForm.resetFields()
     gradeForm.setFieldsValue({
-      points: sub.awardedPoints ?? 0,
+      points: sub.awardedPoints ?? undefined,
       comment: sub.reviewComment || ''
     })
     setGradeModalOpen(true)
@@ -68,8 +74,9 @@ const HomeworkReview: React.FC = () => {
     try {
       const full = await getSubmission(sub.id)
       setCurrentSubmission(full)
+      gradeForm.resetFields()
       gradeForm.setFieldsValue({
-        points: full.awardedPoints ?? 0,
+        points: full.awardedPoints ?? undefined,
         comment: full.reviewComment || ''
       })
       setGradeModalOpen(true)
@@ -85,8 +92,12 @@ const HomeworkReview: React.FC = () => {
       await gradeSubmission(currentSubmission.id, req)
       message.success(currentSubmission.status === 'GRADED' ? '批改已更新' : '批改完成')
       setGradeModalOpen(false)
-      // 刷新列表
-      if (selectedAssignment) handleSelectAssignment(selectedAssignment)
+      // 实时刷新：提交列表（积分列）+ 作业列表计数（工作台统计）
+      if (selectedAssignment) {
+        const data = await listSubmissions(selectedAssignment.id, undefined, 1, 200)
+        setSubmissions(data.list)
+      }
+      await fetchAssignments()
     } catch (e: unknown) {
       if (e && typeof e === 'object' && 'errorFields' in e) return
       message.error((e as Error)?.message || '批改失败')
@@ -103,7 +114,7 @@ const HomeworkReview: React.FC = () => {
       render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm') },
     { title: '提交/已批', key: 'counts', width: 100,
       render: (_: unknown, r: HomeworkAssignment) =>
-        `${r.submittedCount ?? 0} / ${r.gradedCount ?? 0}` },
+        `${r.submissionCount ?? 0} / ${r.gradedCount ?? 0}` },
     { title: '状态', dataIndex: 'status', width: 90,
       render: (v: string) => {
         const map: Record<string, { color: string; text: string }> = {
@@ -162,9 +173,9 @@ const HomeworkReview: React.FC = () => {
           <Card size="small" style={{ marginBottom: 16 }}>
             <Row gutter={24}>
               <Col span={8}><Statistic title="作业标题" value={selectedAssignment.title} prefix={<FileTextOutlined />} /></Col>
-              <Col span={4}><Statistic title="提交人数" value={`${selectedAssignment.submittedCount ?? 0} / ${selectedAssignment.submissionCount ?? 0}`} prefix={<TeamOutlined />} /></Col>
+              <Col span={4}><Statistic title="提交人数" value={selectedAssignment.submissionCount ?? 0} prefix={<TeamOutlined />} /></Col>
               <Col span={4}><Statistic title="已批改" value={selectedAssignment.gradedCount ?? 0} prefix={<CheckOutlined />} /></Col>
-              <Col span={4}><Statistic title="待批改" value={(selectedAssignment.submittedCount ?? 0) - (selectedAssignment.gradedCount ?? 0)} /></Col>
+              <Col span={4}><Statistic title="待批改" value={(selectedAssignment.submissionCount ?? 0) - (selectedAssignment.gradedCount ?? 0)} /></Col>
             </Row>
           </Card>
           <Table columns={submissionColumns} dataSource={submissions} rowKey="id"

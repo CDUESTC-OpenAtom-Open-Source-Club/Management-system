@@ -13,8 +13,6 @@ import {
 } from '../../api/homework'
 import { getCurrentUser } from '../../utils/auth'
 import type { HomeworkAssignment, HomeworkAssignmentForm } from '../../types/homework'
-import type { PointItem } from '../../types/point'
-import { getPointItems } from '../../api/point'
 import { getCohorts } from '../../api/cohort'
 import type { Cohort } from '../../types/cohort'
 import CohortSelect from '../../components/CohortSelect'
@@ -29,7 +27,6 @@ const HomeworkManagement: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
-  const [pointItems, setPointItems] = useState<PointItem[]>([])
   const [cohorts, setCohorts] = useState<Cohort[]>([])
   const [activeCohort, setActiveCohort] = useState<string>('all')
   const [form] = Form.useForm()
@@ -47,14 +44,7 @@ const HomeworkManagement: React.FC = () => {
     } catch { /* handled */ } finally { setLoading(false) }
   }, [cohortId])
 
-  const fetchPointItems = useCallback(async () => {
-    try {
-      const items = await getPointItems()
-      setPointItems(items)
-    } catch { /* handled */ }
-  }, [])
-
-  useEffect(() => { fetchAssignments(); fetchPointItems() }, [fetchAssignments, fetchPointItems])
+  useEffect(() => { fetchAssignments() }, [fetchAssignments])
 
   useEffect(() => { getCohorts().then(setCohorts) }, [])
 
@@ -83,7 +73,6 @@ const HomeworkManagement: React.FC = () => {
       cohortId: item.cohortId ?? undefined,
       deadline: dayjs(item.deadline),
       maxPoints: item.maxPoints,
-      pointItemId: item.pointItemId || undefined,
     })
     setModalOpen(true)
   }
@@ -100,7 +89,6 @@ const HomeworkManagement: React.FC = () => {
         cohortId: values.cohortId,
         deadline: values.deadline.toISOString(),
         maxPoints: values.maxPoints,
-        pointItemId: values.pointItemId || undefined,
       }
       if (editingId) {
         await updateAssignment(editingId, data)
@@ -164,7 +152,6 @@ const HomeworkManagement: React.FC = () => {
       render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm') },
     { title: '最大积分', dataIndex: 'maxPoints', width: 100,
       render: (v: number | undefined) => v != null ? `${v} 分` : '不限' },
-    { title: '积分归属', dataIndex: 'pointItemName', width: 120, render: (v: string) => v || '-' },
     { title: '提交/已批', key: 'counts', width: 100,
       render: (_: unknown, r: HomeworkAssignment) =>
         `${r.submittedCount ?? 0} / ${r.gradedCount ?? 0}` },
@@ -251,9 +238,10 @@ const HomeworkManagement: React.FC = () => {
                 disabled={isMinister}
                 allowClear={form.getFieldValue('targetType') !== 'DEPARTMENT'}>
                 <Select.Option value="技术部">技术部</Select.Option>
-                <Select.Option value="宣传部">宣传部</Select.Option>
-                <Select.Option value="秘书处">秘书处</Select.Option>
+                <Select.Option value="外联部">外联部</Select.Option>
+                <Select.Option value="宣策部">宣策部</Select.Option>
                 <Select.Option value="组织部">组织部</Select.Option>
+                <Select.Option value="秘书处">秘书处</Select.Option>
               </Select>
             </Form.Item>
           </Space>
@@ -264,13 +252,6 @@ const HomeworkManagement: React.FC = () => {
             </Form.Item>
             <Form.Item name="maxPoints" label="最大积分">
               <InputNumber min={0} precision={1} style={{ width: 120 }} placeholder="不限" />
-            </Form.Item>
-            <Form.Item name="pointItemId" label="积分归属">
-              <Select style={{ width: 180 }} placeholder="选择积分项目" allowClear>
-                {pointItems.map(pi => (
-                  <Select.Option key={pi.id} value={pi.id}>{pi.itemName}</Select.Option>
-                ))}
-              </Select>
             </Form.Item>
           </Space>
         </Form>

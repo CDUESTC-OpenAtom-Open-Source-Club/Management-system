@@ -83,10 +83,10 @@ public class HomeworkService {
             HomeworkAssignmentResponse r = toResponse(a);
             HomeworkSubmission sub = submissionRepository
                     .findByHomeworkIdAndMemberIdAndDeletedAtIsNull(a.getId(), memberId).orElse(null);
-            if (sub != null) {
-                r.setSubmittedCount(1);
-                r.setGradedCount("GRADED".equals(sub.getStatus()) ? 1 : 0);
-            }
+            // 成员视角：submittedCount/gradedCount 表示「本人」提交状态（0/1）。
+            // 必须覆盖 toResponse 的全局计数，否则他人提交会让未提交成员被误判为「已提交」。
+            r.setSubmittedCount(sub != null ? 1 : 0);
+            r.setGradedCount(sub != null && "GRADED".equals(sub.getStatus()) ? 1 : 0);
             return r;
         }).toList();
     }

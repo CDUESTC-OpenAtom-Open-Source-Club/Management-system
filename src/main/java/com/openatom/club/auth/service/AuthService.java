@@ -26,6 +26,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -40,6 +41,11 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final OperationLogService logService;
     private final PermissionChecker permissionChecker;
+
+    /** 自改部门时禁止设为「秘书处」（该部门即 fullAccess） */
+    private static final String SECRETARY_DEPARTMENT = "秘书处";
+    /** 自改职务时禁止设为这些管理员/部长职务 */
+    private static final Set<String> PRIVILEGED_POSITIONS = Set.of("会长", "副会长", "部长");
 
     @Transactional
     public LoginResponse login(LoginRequest req) {
@@ -195,9 +201,37 @@ public class AuthService {
     public CurrentUserResponse updateMyProfile(Long userId, UpdateMyProfileRequest req) {
         UserAccount user = findUser(userId);
         Member member = getRequiredMember(user);
-        // 组织身份（届次/部门/职务）不在此接口内修改，仅维护个人资料
-        member.setName(req.getName());
-        member.setStudentNo(req.getStudentNo());
+        // 届次不在本接口内修改；部门/职务允许本人自改，但不得自设管理员身份（防自提权）
+        String name = StringUtils.hasText(req.getName()) ? req.getName().trim() : null;
+        String studentNo = StringUtils.hasText(req.getStudentNo()) ? req.getStudentNo().trim() : null;
+        if (name == null) {
+            throw new IllegalArgumentException("姓名不能为空");
+        }
+        if (studentNo == null) {
+            throw new IllegalArgumentException("学号不能为空");
+        }
+        // 学号唯一校验，避免数据库 UNIQUE 约束冲突以 500 暴露
+        if (!studentNo.equals(member.getStudentNo()) &&
+                memberRepo.existsByStudentNoAndDeletedAtIsNullAndIdNot(studentNo, member.getId())) {
+            throw new IllegalArgumentException("学号已被其他成员使用: " + studentNo);
+        }
+        // 部门/职务自改：仅当值有变化时校验，禁止自设为管理员身份（除非本已持有）
+        String department = trimToNull(req.getDepartment());
+        String position = trimToNull(req.getPosition());
+        if (department != null && !department.equals(member.getDepartment())) {
+            if (SECRETARY_DEPARTMENT.equals(department)) {
+                throw new IllegalArgumentException("部门不能自行设置为秘书处");
+            }
+            member.setDepartment(department);
+        }
+        if (position != null && !position.equals(member.getPosition())) {
+            if (PRIVILEGED_POSITIONS.contains(position)) {
+                throw new IllegalArgumentException("职务不能自行设置为" + position);
+            }
+            member.setPosition(position);
+        }
+        member.setName(name);
+        member.setStudentNo(studentNo);
         member.setPhone(req.getPhone());
         member.setMajor(req.getMajor());
         memberRepo.save(member);
@@ -317,6 +351,10 @@ public class AuthService {
             throw new IllegalArgumentException("用户名不能为空");
         }
         return username.trim();
+    }
+
+    private String trimToNull(String s) {
+        return StringUtils.hasText(s) ? s.trim() : null;
     }
 
     private void validateNewPassword(String password, String fieldName) {

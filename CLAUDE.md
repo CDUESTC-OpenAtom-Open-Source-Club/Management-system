@@ -19,7 +19,7 @@ Lombok · springdoc-openapi · Apache POI · React 18 · TypeScript · Vite 5 ·
 6. **Flyway 迁移**：数据库结构变更必须通过 `src/main/resources/db/migration/` 下的 SQL 文件。
 7. **前端风格一致**：后台使用白色/浅灰内容区 + 标准 Ant Design 组件，登录页为深蓝宇宙星空风。
 8. **届次体系**：以「届次（cohort）」为一级数据归属维度，成员/账号/积分/活动/作业按届隔离；
-   「届次/部门/职务」三者是**组织身份**，只能由 fullAccess 管理员在成员管理中修改，普通成员不可改。
+   「届次」只能由 fullAccess 管理员在成员管理中修改；「部门/职务」可由本人自改，但不能自设为管理员身份（秘书处/会长/副会长/部长）。
 
 ## 数据库
 
@@ -68,8 +68,8 @@ boolean fullAccess = "会长".equals(position)
                   || "秘书处".equals(department);
 ```
 
-**组织身份 = 届次 + 部门 + 职务**，三者只能由 fullAccess 管理员在「成员管理」中修改；
-普通成员在「我的资料」中只读展示，`PUT /api/my/profile` 的 DTO 已移除这三个字段（从接口层面杜绝自提权）。
+**组织身份 = 届次 + 部门 + 职务**。届次只能由 fullAccess 管理员在「成员管理」中修改；
+部门/职务可在「我的资料」中由本人自改，但后端校验禁止自设为管理员身份（秘书处/会长/副会长/部长），从接口层面杜绝自提权。
 
 | 条件 | 可访问页面 |
 |------|-----------|
@@ -159,6 +159,8 @@ npm run dev
 | 我的资料 | `/api/my/profile` | GET / PUT |
 | 成员管理 | `/api/members` | GET / POST |
 | 成员管理 | `/api/members/{id}` | GET / PUT / DELETE |
+| 成员管理 | `/api/members/batch-cohort` | PUT |
+| 成员管理 | `/api/members/batch-delete` | POST |
 | 积分项目 | `/api/point-items` | GET / POST |
 | 积分项目 | `/api/point-items/{id}` | PUT / DELETE |
 | 积分申请 | `/api/point-applications` | GET / POST |
@@ -221,7 +223,7 @@ npm run dev
 │   │   │   └── point/               # 积分系统模块（item/application/record/table）
 │   │   └── resources/
 │   │       ├── application.yml      # 主配置
-│   │       └── db/migration/        # Flyway 迁移（V1~V7；V6 届次基础 + V7 届次业务范围）
+│   │       └── db/migration/        # Flyway 迁移（V1~V9；V6 届次基础 + V7 届次业务范围 + V8 积分项目类型重构 + V9 软删除唯一约束修正）
 │   └── test/                        # 测试
 ├── frontend/
 │   ├── package.json
@@ -302,7 +304,7 @@ const blob = await request.get(url, { responseType: 'blob' })
 - **不要新增 role 表或 role 字段**，权限基于 `members.position` + `members.department`；届次只是数据归属维度，不改变 fullAccess 判定。
 - **作业模块权限**：部长拥有独立作业管理权限（`canManageHomework()`），但**不进入 fullAccess**；**部长跨届可管理、但仅限本部门**，fullAccess 跨届跨部门；批改/下载附件需用 `canReviewSubmission(department)` 校验本部门范围。
 - **届次查询参数约定**：`cohortId` 空=全部、`-1`=未分届、正数=指定届次（前端用 `Segmented`/`Select` 传 `-1` 表示未分届）。
-- **组织身份只能由管理员改**：届次/部门/职务只能通过 `PUT /api/members/{id}` 由 fullAccess 修改；`PUT /api/my/profile` 的 DTO 只含 name/studentNo/phone/major。
+- **组织身份自改规则**：届次只能通过 `PUT /api/members/{id}` 由 fullAccess 修改；`PUT /api/my/profile` 的 DTO 含 name/studentNo/phone/major/department/position，部门/职务可由本人自改，但后端（`AuthService.updateMyProfile`）禁止自设为管理员身份「秘书处/会长/副会长/部长」（除非本已持有）。
 - **届次显示**：统一 `cohortLabel(year)` → `"YYYY届"`；数据库存完整年份（`cohorts.year`），禁止存 `"2026届"` 或 `"26"`。
 - **关系表**：`point_item_cohorts`（0 条 = 全局适用）和 `archive_cohorts` 存多届，禁止用 `"2025,2026"` 字符串。
 - **作业届次校验**：`listMyHomework`/`getAssignment`/`submitHomework` 都按 `assignment.cohortId == actor.cohortId` 校验；部长管理走 `department == actor.department`（不限制届次）。
@@ -314,6 +316,8 @@ const blob = await request.get(url, { responseType: 'blob' })
 - **文件上传**通过 `FileStorageService` 统一管理，存储路径为 `./data/openatom-storage`。**文件下载/查看不经过 axios**，使用原生 `fetch`（见上方文件机制说明）。
 - **密码管理**：系统不再内置默认账号；账号通过账号管理功能创建，密码由管理员设置（BCrypt 加密）。
 - **积分项目 API** (`GET /api/point-items`) 返回 `List`（非分页结构），前端 API 返回类型为 `PointItem[]`，不要再用 `.list` 访问。
+- **积分项目类型**：固定 6 类（活动 / 比赛 / 开源学习 / 社区贡献 / 演讲或主持 / 其他），展示顺序严格固定；后端 `PointItemTypes` 校验新增/编辑只接受这 6 类，前端统一用 `utils/pointItemTypes.ts` 的 `POINT_ITEM_TYPES`（含 `PointItemType` 联合类型），禁止各页面硬编码类型数组。历史数据由 V8 迁移（会议→演讲或主持、任务→社区贡献）。
+- **成员删除语义**：删除成员 = 软删除 Member + 软删除该成员全部 PointApplication 与 PointRecord（APPLICATION/MANUAL/HOMEWORK 三来源）+ 禁用关联 UserAccount；单删与批删共享 `MemberService.deleteMembersInternal`，整个批次同一事务（全量校验后统一执行，失败整体回滚）；`HomeworkSubmission` 保留但 `point_record_id` 置空防悬空引用；禁止删除当前登录管理员本人。
 - **积分总表** (`PointRecordRepository`) 的统计查询需注意 `pointItemId` 可能为 NULL（手动加分记录），已用 `COALESCE` 和 `IS NOT NULL` 处理。
 - **前端 API 路径**：`/api/point-applications` 的 POST 对应提交登记（非 `/api/point-applications/submit`），前端用 `submitPointApplications` 封装。
 - **搜索定位 API** (`/api/points/table/search-position`) 需传中文关键词时应 URL 编码，直接拼接可能因编码问题失败。

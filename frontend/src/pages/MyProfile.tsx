@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Card, Form, Input, message, Descriptions, Space, Spin, Typography, Alert, Divider } from 'antd'
+import { Button, Card, Form, Input, Select, message, Descriptions, Space, Spin, Typography, Alert, Divider } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { getMyProfile, updateMyProfile } from '../api/profile'
 import { changePassword } from '../api/auth'
@@ -8,6 +8,11 @@ import type { MyProfileResponse, UpdateMyProfileRequest } from '../api/auth'
 import { cohortLabel } from '../utils/cohort'
 
 const { Title, Text } = Typography
+
+// 普通成员可自行选择的部门（管理员部门「秘书处」不可自选，后端二次校验兜底）
+const SELF_SELECTABLE_DEPARTMENTS = ['技术部', '外联部', '宣策部', '组织部']
+// 普通成员可自行选择的职务（管理员职务「部长/副会长/会长」不可自选）
+const SELF_SELECTABLE_POSITIONS = ['社员']
 
 const MyProfile: React.FC = () => {
   const [form] = Form.useForm()
@@ -33,6 +38,8 @@ const MyProfile: React.FC = () => {
         studentNo: res.studentNo,
         phone: res.phone,
         major: res.major,
+        department: res.department,
+        position: res.position,
       })
     } finally {
       setLoading(false)
@@ -89,6 +96,16 @@ const MyProfile: React.FC = () => {
       </Card>
     )
   }
+
+  // 部门/职务可选项：始终包含当前值（避免已持有管理员身份的用户被迫改动），再叠加可自选的非管理员值
+  const departmentOptions = Array.from(new Set([
+    ...(profile?.department ? [profile.department] : []),
+    ...SELF_SELECTABLE_DEPARTMENTS,
+  ])).map((d) => ({ label: d, value: d }))
+  const positionOptions = Array.from(new Set([
+    ...(profile?.position ? [profile.position] : []),
+    ...SELF_SELECTABLE_POSITIONS,
+  ])).map((p) => ({ label: p, value: p }))
 
   return (
     <Card>
@@ -160,14 +177,12 @@ const MyProfile: React.FC = () => {
 
         <Divider />
 
-        {/* 组织身份（只读，由管理员在成员管理中维护） */}
+        {/* 届次（只读，由管理员在成员管理中维护） */}
         <Card size="small" title="组织身份" style={{ maxWidth: 720 }}>
-          <Descriptions column={3} size="small">
+          <Descriptions column={1} size="small">
             <Descriptions.Item label="届次">{cohortLabel(profile?.cohortYear)}</Descriptions.Item>
-            <Descriptions.Item label="部门">{profile?.department || '—'}</Descriptions.Item>
-            <Descriptions.Item label="职务">{profile?.position || '—'}</Descriptions.Item>
           </Descriptions>
-          <Text type="secondary">届次、部门、职务由管理员在「成员管理」中维护，本人不可修改。</Text>
+          <Text type="secondary">届次由管理员在「成员管理」中维护，本人不可修改；部门、职务可在下方自行选择。</Text>
         </Card>
 
         {/* 个人资料（仅本人可维护） */}
@@ -177,10 +192,10 @@ const MyProfile: React.FC = () => {
           onFinish={handleFinish}
           style={{ maxWidth: 720 }}
         >
-          <Form.Item label="姓名" name="name">
+          <Form.Item label="姓名" name="name" rules={[{ required: true, message: '请输入姓名' }]}>
             <Input placeholder="请输入姓名" />
           </Form.Item>
-          <Form.Item label="学号" name="studentNo">
+          <Form.Item label="学号" name="studentNo" rules={[{ required: true, message: '请输入学号' }]}>
             <Input placeholder="请输入学号" />
           </Form.Item>
           <Form.Item label="手机号" name="phone">
@@ -188,6 +203,12 @@ const MyProfile: React.FC = () => {
           </Form.Item>
           <Form.Item label="专业" name="major">
             <Input placeholder="请输入专业" />
+          </Form.Item>
+          <Form.Item label="部门" name="department">
+            <Select placeholder="请选择部门" options={departmentOptions} />
+          </Form.Item>
+          <Form.Item label="职务" name="position">
+            <Select placeholder="请选择职务" options={positionOptions} />
           </Form.Item>
           <Space>
             <Button onClick={() => navigate(-1)}>返回</Button>

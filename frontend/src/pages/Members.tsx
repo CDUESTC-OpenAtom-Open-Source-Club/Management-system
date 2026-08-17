@@ -16,7 +16,7 @@ import { canManage, isAdmin } from '../utils/permission'
 import { getCurrentUser } from '../utils/auth'
 
 const POSITION_OPTIONS = ['社员', '部长', '会长', '副会长']
-const DEPARTMENT_OPTIONS = ['秘书处', '技术部', '宣传部', '运营部', '其他']
+const DEPARTMENT_OPTIONS = ['秘书处', '技术部', '外联部', '宣策部', '组织部', '其他']
 const UNASSIGNED = 'unassigned'
 
 const Members: React.FC = () => {

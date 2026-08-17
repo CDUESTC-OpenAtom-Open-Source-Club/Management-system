@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import {
   Card, Select, Row, Col, Button, Upload, Table, Space,
   Popconfirm, message, Typography, Empty, Divider, Alert, Tag,
+  DatePicker,
 } from 'antd'
 import {
   UploadOutlined, DownloadOutlined, DeleteOutlined, InboxOutlined,
@@ -25,7 +26,6 @@ const { Text, Title } = Typography
 const REPORT_EXTS = ['.doc', '.docx']
 const VOUCHER_EXTS = ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx']
 const currentYear = dayjs().year()
-const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => currentYear - i)
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({ label: `${i + 1}月`, value: i + 1 }))
 
 const Finance: React.FC = () => {
@@ -181,11 +181,12 @@ const Finance: React.FC = () => {
         <Card style={{ marginBottom: 16 }}>
           <Space wrap>
             <Text strong>年份：</Text>
-            <Select
-              value={year}
-              onChange={(v) => setYear(v)}
-              style={{ width: 100 }}
-              options={YEAR_OPTIONS.map((y) => ({ label: `${y}年`, value: y }))}
+            <DatePicker
+              picker="year"
+              value={dayjs().year(year)}
+              onChange={(d) => d && setYear(d.year())}
+              allowClear={false}
+              style={{ width: 110 }}
             />
             <Text strong>月份：</Text>
             <Select

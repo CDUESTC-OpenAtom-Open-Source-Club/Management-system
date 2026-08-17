@@ -18,6 +18,7 @@ import com.openatom.club.homework.repository.HomeworkSubmissionRepository;
 import com.openatom.club.log.service.OperationLogService;
 import com.openatom.club.member.entity.Member;
 import com.openatom.club.member.repository.MemberRepository;
+import com.openatom.club.point.PointItemTypes;
 import com.openatom.club.point.entity.PointItem;
 import com.openatom.club.point.entity.PointRecord;
 import com.openatom.club.point.repository.PointItemRepository;
@@ -253,7 +254,8 @@ public class HomeworkSubmissionService {
         if (isFirstGrade) {
             pointRecord = new PointRecord();
             pointRecord.setMemberId(submission.getMemberId());
-            pointRecord.setPointItemId(assignment.getPointItemId());
+            // 作业积分统一归入「开源学习」类型，不随作业创建时手选的积分项目
+            pointRecord.setPointItemId(findOpenSourceLearningPointItemId());
             pointRecord.setScore(req.getPoints());
             pointRecord.setSourceType("HOMEWORK");
             pointRecord.setOperatorName(actor.getName());
@@ -349,6 +351,14 @@ public class HomeworkSubmissionService {
     }
 
     // ==================== 内部辅助方法 ====================
+
+    /** 作业积分统一归入「开源学习」类型；无该类型项目时返回 null（按手动积分处理） */
+    private Long findOpenSourceLearningPointItemId() {
+        return pointItemRepository
+                .findFirstByItemTypeAndDeletedAtIsNullOrderBySortOrderAscIdAsc(PointItemTypes.OPEN_SOURCE_LEARNING)
+                .map(PointItem::getId)
+                .orElse(null);
+    }
 
     private boolean isMemberInTarget(Member member, HomeworkAssignment assignment) {
         if ("ALL".equals(assignment.getTargetType())) return true;

@@ -50,15 +50,17 @@ class CohortPermissionTests {
     // ============ 组织身份 DTO 形状（杜绝普通成员自提权） ============
 
     @Test
-    void profileDtoMustNotContainOrganizationFields() {
+    void profileDtoAllowsSelfIdentityButNotCohort() {
         Set<String> fields = fieldNames(UpdateMyProfileRequest.class);
-        assertFalse(fields.contains("department"), "个人资料 DTO 不能包含 department");
-        assertFalse(fields.contains("position"), "个人资料 DTO 不能包含 position");
-        assertFalse(fields.contains("cohortId"), "个人资料 DTO 不能包含 cohortId");
         assertTrue(fields.contains("name"));
         assertTrue(fields.contains("studentNo"));
         assertTrue(fields.contains("phone"));
         assertTrue(fields.contains("major"));
+        // 部门/职务允许本人自改，但后端会校验「不得自设管理员身份」
+        assertTrue(fields.contains("department"), "个人资料 DTO 应包含 department");
+        assertTrue(fields.contains("position"), "个人资料 DTO 应包含 position");
+        // 届次仍只能由管理员在成员管理中修改
+        assertFalse(fields.contains("cohortId"), "个人资料 DTO 不能包含 cohortId");
     }
 
     @Test
@@ -93,7 +95,7 @@ class CohortPermissionTests {
         setActor("会长", "会长室", "会长", null, null);
         assertTrue(checker.canManageHomework());
         assertTrue(checker.canReviewSubmission("技术部"));
-        assertTrue(checker.canReviewSubmission("宣传部"));
+        assertTrue(checker.canReviewSubmission("宣策部"));
     }
 
     @Test
@@ -108,7 +110,7 @@ class CohortPermissionTests {
         // 技术部部长：只要部门一致即可批改（届次不参与校验，天然支持跨届本部门）
         setActor("张部长", "技术部", "部长", 1L, 2025);
         assertTrue(checker.canReviewSubmission("技术部"));
-        assertFalse(checker.canReviewSubmission("宣传部"));
+        assertFalse(checker.canReviewSubmission("宣策部"));
     }
 
     @Test

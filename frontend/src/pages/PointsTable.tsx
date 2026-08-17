@@ -291,7 +291,11 @@ const PointsTable: React.FC = () => {
     { title: '原因', dataIndex: 'reason', ellipsis: true },
     {
       title: '来源', dataIndex: 'sourceType', width: 90,
-      render: (v: string) => v === 'APPLICATION' ? <Tag>活动登记</Tag> : <Tag color="orange">手动录入</Tag>
+      render: (v: string) => {
+        if (v === 'APPLICATION') return <Tag>活动登记</Tag>
+        if (v === 'HOMEWORK') return <Tag color="blue">作业</Tag>
+        return <Tag color="orange">手动录入</Tag>
+      }
     },
     { title: '操作人', dataIndex: 'operatorName', width: 90 },
     canManage() ? {

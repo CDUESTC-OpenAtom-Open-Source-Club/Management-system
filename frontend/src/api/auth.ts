@@ -29,7 +29,7 @@ export interface BatchCreateAccountItem { username: string; initialPassword: str
 export interface BatchCreateUsersRequest { cohortId: number; accounts: BatchCreateAccountItem[] }
 export interface BatchCreateUsersResponse { created: { username: string; memberId: number }[]; failed: { username: string; reason: string }[] }
 export interface MyProfileResponse { userId: number; username: string; memberId?: number; name?: string; studentNo?: string; phone?: string; major?: string; department?: string; position?: string; cohortId?: number | null; cohortYear?: number | null; fullAccess: boolean; profileCompleted: boolean; initialPasswordChanged: boolean }
-export interface UpdateMyProfileRequest { name?: string; studentNo?: string; phone?: string; major?: string }
+export interface UpdateMyProfileRequest { name?: string; studentNo?: string; phone?: string; major?: string; department?: string; position?: string }
 
 export function login(data: LoginRequest): Promise<LoginResponse> { return request.post('/api/auth/login', data) }
 export function getMe(): Promise<CurrentUser> { return request.get('/api/auth/me') }
