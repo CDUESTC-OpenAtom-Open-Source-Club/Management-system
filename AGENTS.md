@@ -90,6 +90,9 @@ boolean fullAccess = "会长".equals(position) || "副会长".equals(position) |
 11. 届次显示统一用 `cohortLabel(year)` → "YYYY届"，DB 存完整年份；关系表存多届，禁止逗号字符串
 12. 积分项目类型固定 6 类（活动/比赛/开源学习/社区贡献/演讲或主持/其他），后端 `PointItemTypes` 校验、前端 `utils/pointItemTypes.ts` 的 `POINT_ITEM_TYPES` 共享，禁止各页硬编码
 13. 删除成员 = 软删除成员 + 清理其积分申请/积分记录（APPLICATION/MANUAL/HOMEWORK 三来源）+ 禁用关联账号；单删/批删共享 `MemberService.deleteMembersInternal`，批量接口 `POST /api/members/batch-delete`
+14. 部门列表统一为 技术部/外联部/宣策部/组织部/秘书处/其他（「其他」仅管理员可选，供会长等无部门成员用）；前端硬编码在 MyProfile/Members/ActorSettings/HomeworkManagement 多处，改部门需同步
+15. 作业积分统一归「开源学习」类型：批改时 `HomeworkSubmissionService` 自动找 `item_type=开源学习` 的项目归属，作业创建不再手选积分项目
+16. `student_no`/`username`/`year` 是「仅对未删除行」的部分唯一索引（V9），改这些字段用 `existsBy...DeletedAtIsNull...` 校验即可与 DB 对齐
 
 ## 项目结构
 

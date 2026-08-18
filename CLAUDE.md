@@ -305,9 +305,11 @@ const blob = await request.get(url, { responseType: 'blob' })
 - **作业模块权限**：部长拥有独立作业管理权限（`canManageHomework()`），但**不进入 fullAccess**；**部长跨届可管理、但仅限本部门**，fullAccess 跨届跨部门；批改/下载附件需用 `canReviewSubmission(department)` 校验本部门范围。
 - **届次查询参数约定**：`cohortId` 空=全部、`-1`=未分届、正数=指定届次（前端用 `Segmented`/`Select` 传 `-1` 表示未分届）。
 - **组织身份自改规则**：届次只能通过 `PUT /api/members/{id}` 由 fullAccess 修改；`PUT /api/my/profile` 的 DTO 含 name/studentNo/phone/major/department/position，部门/职务可由本人自改，但后端（`AuthService.updateMyProfile`）禁止自设为管理员身份「秘书处/会长/副会长/部长」（除非本已持有）。
+- **部门列表统一**：部门固定为 `技术部 / 外联部 / 宣策部 / 组织部 / 秘书处 / 其他`，「其他」仅管理员可选（供会长等无部门成员用）。前端硬编码在 `MyProfile`（本人自改，不含秘书处/其他）、`Members`/`ActorSettings`（含秘书处/其他）、`HomeworkManagement`（作业目标部门）多处，改部门需同步这几处。
 - **届次显示**：统一 `cohortLabel(year)` → `"YYYY届"`；数据库存完整年份（`cohorts.year`），禁止存 `"2026届"` 或 `"26"`。
 - **关系表**：`point_item_cohorts`（0 条 = 全局适用）和 `archive_cohorts` 存多届，禁止用 `"2025,2026"` 字符串。
 - **作业届次校验**：`listMyHomework`/`getAssignment`/`submitHomework` 都按 `assignment.cohortId == actor.cohortId` 校验；部长管理走 `department == actor.department`（不限制届次）。
+- **作业积分归属**：批改作业产生的积分统一归「开源学习」类型——`HomeworkSubmissionService.gradeSubmission` 用 `PointItemTypes.OPEN_SOURCE_LEARNING` 自动找对应积分项目归属，作业创建不再让管理员手选积分项目（`HomeworkManagement` 已移除「积分归属」下拉）。积分明细「来源」列 HOMEWORK 显示「作业」，「原因」列已含作业名（`完成作业：《标题》`）。
 - **不要将 H2 用作生产数据库**（仅测试用，`ddl-auto: validate` 确保 Flyway 管理全部 schema）。
 - **所有表统一使用 BIGINT IDENTITY 主键**。
 - **前端不要在后台页面使用玻璃拟态、霓虹光效或粒子特效**——后台保持简洁专业的白色/浅灰风格。
@@ -319,6 +321,7 @@ const blob = await request.get(url, { responseType: 'blob' })
 - **积分项目类型**：固定 6 类（活动 / 比赛 / 开源学习 / 社区贡献 / 演讲或主持 / 其他），展示顺序严格固定；后端 `PointItemTypes` 校验新增/编辑只接受这 6 类，前端统一用 `utils/pointItemTypes.ts` 的 `POINT_ITEM_TYPES`（含 `PointItemType` 联合类型），禁止各页面硬编码类型数组。历史数据由 V8 迁移（会议→演讲或主持、任务→社区贡献）。
 - **成员删除语义**：删除成员 = 软删除 Member + 软删除该成员全部 PointApplication 与 PointRecord（APPLICATION/MANUAL/HOMEWORK 三来源）+ 禁用关联 UserAccount；单删与批删共享 `MemberService.deleteMembersInternal`，整个批次同一事务（全量校验后统一执行，失败整体回滚）；`HomeworkSubmission` 保留但 `point_record_id` 置空防悬空引用；禁止删除当前登录管理员本人。
 - **积分总表** (`PointRecordRepository`) 的统计查询需注意 `pointItemId` 可能为 NULL（手动加分记录），已用 `COALESCE` 和 `IS NOT NULL` 处理。
+- **软删除 + 唯一约束（V9）**：`members.student_no`/`users.username`/`cohorts.year` 已改为「仅对未删除行」的部分唯一索引（`WHERE deleted_at IS NULL`），与 `@SQLRestriction` 语义一致。改这些唯一字段用 `existsBy...DeletedAtIsNull...` 校验即可与数据库对齐，避免软删除行占用唯一值导致 500；新增唯一字段沿用同一模式。
 - **前端 API 路径**：`/api/point-applications` 的 POST 对应提交登记（非 `/api/point-applications/submit`），前端用 `submitPointApplications` 封装。
 - **搜索定位 API** (`/api/points/table/search-position`) 需传中文关键词时应 URL 编码，直接拼接可能因编码问题失败。
 - **前端路由**：所有 API 路径使用相对路径（如 `/api/users`），由 Vite proxy 转发到 `localhost:8080`。下载/查看接口的 URL 同样用相对路径，交给 `download.ts` 中的原生 fetch 处理。
