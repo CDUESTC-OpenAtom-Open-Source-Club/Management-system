@@ -25,7 +25,6 @@ export interface DashboardStats {
   totalMembers: number
   totalPointItems: number
   pendingApplications: number
-  totalArchiveLinks: number
   totalMeetingMinutes: number
   totalFinancePeriods: number
   departmentDistribution: DepartmentStat[]

@@ -10,7 +10,6 @@ import PointItems from './pages/PointItems'
 import MyApplications from './pages/MyApplications'
 import PointApplications from './pages/PointApplications'
 import PointsTable from './pages/PointsTable'
-import ArchiveLinks from './pages/ArchiveLinks'
 import MeetingMinutes from './pages/MeetingMinutes'
 import Finance from './pages/Finance'
 import OperationLogs from './pages/OperationLogs'
@@ -21,6 +20,6 @@ import HomeworkReview from './pages/homework/HomeworkReview'
 import HomeworkManagement from './pages/homework/HomeworkManagement'
 import CohortManagement from './pages/CohortManagement'
 
-const router = createBrowserRouter([{ path: '/login', element: <Login /> }, { path: '/', element: <AuthGuard><MainLayout /></AuthGuard>, children: [{ index: true, element: <Dashboard /> }, { path: 'members', element: <Members /> }, { path: 'point-items', element: <PointItems /> }, { path: 'my-applications', element: <MyApplications /> }, { path: 'point-applications', element: <PointApplications /> }, { path: 'points-table', element: <PointsTable /> }, { path: 'archive-links', element: <ArchiveLinks /> }, { path: 'meeting-minutes', element: <MeetingMinutes /> }, { path: 'finance', element: <Finance /> }, { path: 'operation-logs', element: <OperationLogs /> }, { path: 'my-profile', element: <MyProfile /> }, { path: 'users', element: <PermissionGuard><Users /></PermissionGuard> }, { path: 'my-homework', element: <MyHomework /> }, { path: 'homework-review', element: <HomeworkReview /> }, { path: 'homework-management', element: <HomeworkManagement /> }, { path: 'cohorts', element: <PermissionGuard><CohortManagement /></PermissionGuard> }] }])
+const router = createBrowserRouter([{ path: '/login', element: <Login /> }, { path: '/', element: <AuthGuard><MainLayout /></AuthGuard>, children: [{ index: true, element: <Dashboard /> }, { path: 'members', element: <Members /> }, { path: 'point-items', element: <PointItems /> }, { path: 'my-applications', element: <MyApplications /> }, { path: 'point-applications', element: <PointApplications /> }, { path: 'points-table', element: <PointsTable /> }, { path: 'meeting-minutes', element: <MeetingMinutes /> }, { path: 'finance', element: <Finance /> }, { path: 'operation-logs', element: <OperationLogs /> }, { path: 'my-profile', element: <MyProfile /> }, { path: 'users', element: <PermissionGuard><Users /></PermissionGuard> }, { path: 'my-homework', element: <MyHomework /> }, { path: 'homework-review', element: <HomeworkReview /> }, { path: 'homework-management', element: <HomeworkManagement /> }, { path: 'cohorts', element: <PermissionGuard><CohortManagement /></PermissionGuard> }] }])
 
 export default router

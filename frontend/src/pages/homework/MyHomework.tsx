@@ -9,9 +9,9 @@ import {
 } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 import PageContainer from '../../components/PageContainer'
-import { listMyHomework, submitHomework, getMySubmission, getDownloadFileUrl, getViewFileUrl } from '../../api/homework'
+import { listMyHomework, submitHomework, getMySubmission, getDownloadFileUrl, getViewFileUrl, listAssignmentFiles, getAssignmentFileDownloadUrl } from '../../api/homework'
 import { downloadFile, viewFile } from '../../utils/download'
-import type { HomeworkAssignment, HomeworkSubmission } from '../../types/homework'
+import type { HomeworkAssignment, HomeworkSubmission, AssignmentFileInfo } from '../../types/homework'
 import dayjs from 'dayjs'
 
 const { TextArea } = Input
@@ -26,6 +26,7 @@ const MyHomework: React.FC = () => {
   const [submissionLoading, setSubmissionLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [fileList, setFileList] = useState<UploadFile[]>([])
+  const [assignmentFiles, setAssignmentFiles] = useState<AssignmentFileInfo[]>([])
   const [form] = Form.useForm()
 
   const fetchAssignments = useCallback(async () => {
@@ -46,6 +47,7 @@ const MyHomework: React.FC = () => {
     setCurrentAssignment(item)
     setDetailModalOpen(true)
     setSubmissionLoading(true)
+    listAssignmentFiles(item.id).then(setAssignmentFiles).catch(() => setAssignmentFiles([]))
     try {
       const sub = await getMySubmission(item.id)
       setMySubmission(sub)
@@ -154,6 +156,20 @@ const MyHomework: React.FC = () => {
             <div style={{ whiteSpace: 'pre-wrap' }}>{currentAssignment?.description || '无'}</div>
           </Descriptions.Item>
         </Descriptions>
+
+        {assignmentFiles.length > 0 && (
+          <Card title="作业附件" size="small" style={{ marginBottom: 16 }}>
+            {assignmentFiles.map(f => (
+              <Space key={f.fileId} style={{ marginRight: 12, marginBottom: 4 }}>
+                <span>{f.originalName}</span>
+                <Button type="link" size="small"
+                  onClick={() => downloadFile(getAssignmentFileDownloadUrl(currentAssignment!.id, f.fileId), f.originalName)}>
+                  下载
+                </Button>
+              </Space>
+            ))}
+          </Card>
+        )}
 
         <Card title="我的提交" size="small">
           <Spin spinning={submissionLoading}>

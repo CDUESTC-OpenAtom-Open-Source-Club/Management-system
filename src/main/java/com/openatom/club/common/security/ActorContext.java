@@ -48,7 +48,7 @@ public class ActorContext {
 
     /**
      * 全部权限：会长 | 副会长 | 秘书处成员
-     * 含义：可以管理成员、积分、归档、会议、财务、操作日志、账号
+     * 含义：可以管理成员、积分、会议、财务、操作日志、账号
      */
     public boolean isFullAccess() {
         return isPresident() || isVicePresident() || isSecretary();

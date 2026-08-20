@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   Table, Button, Modal, Form, Input, InputNumber, Tag, Space, Descriptions, Empty, message,
-  Card, Row, Col, Statistic, Segmented
+  Card, Row, Col, Statistic, Segmented, Popconfirm
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
-  EyeOutlined, CheckOutlined, TeamOutlined, FileTextOutlined, UserOutlined
+  EyeOutlined, CheckOutlined, TeamOutlined, FileTextOutlined, UserOutlined, DeleteOutlined
 } from '@ant-design/icons'
 import PageContainer from '../../components/PageContainer'
-import { listAssignments, listSubmissions, getSubmission, gradeSubmission, getDownloadFileUrl, getViewFileUrl } from '../../api/homework'
+import { listAssignments, listSubmissions, getSubmission, gradeSubmission, getDownloadFileUrl, getViewFileUrl, batchDeleteAssignments } from '../../api/homework'
 import { downloadFile, viewFile } from '../../utils/download'
 import type { HomeworkAssignment, HomeworkSubmission, GradeRequest } from '../../types/homework'
 import { getCohorts } from '../../api/cohort'
@@ -32,6 +32,7 @@ const HomeworkReview: React.FC = () => {
   const [gradeForm] = Form.useForm()
   const [cohorts, setCohorts] = useState<Cohort[]>([])
   const [activeCohort, setActiveCohort] = useState<string>('all')
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
   const cohortId = activeCohort === 'all' ? undefined : Number(activeCohort)
 
@@ -102,6 +103,18 @@ const HomeworkReview: React.FC = () => {
       if (e && typeof e === 'object' && 'errorFields' in e) return
       message.error((e as Error)?.message || '批改失败')
     } finally { setGrading(false) }
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) return
+    try {
+      await batchDeleteAssignments(selectedRowKeys.map(Number))
+      message.success(`已批量删除 ${selectedRowKeys.length} 个作业`)
+      setSelectedRowKeys([])
+      fetchAssignments()
+    } catch (e: unknown) {
+      message.error((e as Error)?.message || '批量删除失败')
+    }
   }
 
   // 作业列表列
@@ -183,8 +196,25 @@ const HomeworkReview: React.FC = () => {
             onRow={(record) => ({ onDoubleClick: () => handleViewSubmission(record) })} />
         </>
       ) : (
-        <Table columns={assignmentColumns} dataSource={assignments} rowKey="id"
-          loading={loading} pagination={false} scroll={{ x: 700 }} />
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <Popconfirm
+              title={`确定删除选中的 ${selectedRowKeys.length} 个作业？`}
+              onConfirm={handleBatchDelete}
+              okText="删除" cancelText="取消"
+              disabled={selectedRowKeys.length === 0}
+            >
+              <Button danger icon={<DeleteOutlined />} disabled={selectedRowKeys.length === 0}>批量删除</Button>
+            </Popconfirm>
+          </div>
+          <Table
+            rowSelection={{
+              selectedRowKeys,
+              onChange: (keys) => setSelectedRowKeys(keys),
+            }}
+            columns={assignmentColumns} dataSource={assignments} rowKey="id"
+            loading={loading} pagination={false} scroll={{ x: 700 }} />
+        </>
       )}
 
       {/* 批改/查看 Modal */}
@@ -235,12 +265,27 @@ const HomeworkReview: React.FC = () => {
               <Form.Item name="comment" label="批改意见">
                 <TextArea rows={3} placeholder="填写批改意见（可选）" maxLength={1000} showCount />
               </Form.Item>
-              <Form.Item name="points" label="积分" rules={[{ required: true, message: '请输入积分' }]}>
-                <InputNumber min={0} max={selectedAssignment?.maxPoints ?? 999} style={{ width: 200 }}
-                  precision={selectedAssignment?.maxPoints != null && selectedAssignment.maxPoints % 1 !== 0 ? 1 : 0} />
-                {selectedAssignment?.maxPoints != null && (
-                  <span style={{ marginLeft: 8, color: '#999' }}>最大积分：{selectedAssignment.maxPoints} 分</span>
-                )}
+              <Form.Item label="积分" required>
+                <Space align="center">
+                  <Form.Item name="points" noStyle rules={[
+                    { required: true, message: '请输入积分' },
+                    {
+                      validator: (_, value) => {
+                        if (value == null) return Promise.resolve()
+                        if (value < 0) return Promise.reject(new Error('积分不能小于 0'))
+                        const max = selectedAssignment?.maxPoints
+                        if (max != null && value > max) return Promise.reject(new Error(`积分不能超过最大积分 ${max} 分`))
+                        return Promise.resolve()
+                      }
+                    }
+                  ]}>
+                    <InputNumber min={0} max={selectedAssignment?.maxPoints ?? 999} style={{ width: 200 }}
+                      precision={selectedAssignment?.maxPoints != null && selectedAssignment.maxPoints % 1 !== 0 ? 1 : 0} />
+                  </Form.Item>
+                  {selectedAssignment?.maxPoints != null && (
+                    <span style={{ color: '#999' }}>最大积分：{selectedAssignment.maxPoints} 分</span>
+                  )}
+                </Space>
               </Form.Item>
             </Form>
           </>

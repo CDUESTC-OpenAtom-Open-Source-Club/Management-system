@@ -24,6 +24,7 @@ public class PointRecordService {
     private final OperationLogService logService;
 
     public List<PointRecordResponse> listByMember(Long memberId) {
+        permissionChecker.requireFullAccess();
         memberRepository.findByIdAndDeletedAtIsNull(memberId)
                 .orElseThrow(() -> BizException.of("成员不存在"));
         return pointRecordRepository.findAllByMemberIdAndDeletedAtIsNull(memberId)

@@ -15,11 +15,24 @@ export interface HomeworkAssignment {
   pointItemName?: string
   createdByUserId?: number
   createdByName?: string
+  /** 所有有效提交总数（含已批改）= 提交人数；批改不会减少 */
   submissionCount: number
+  /** 当前仍处于 SUBMITTED 状态 = 待批改数；成员视角「我的作业」被后端覆盖为本人是否已提交 0/1 */
   submittedCount: number
+  /** 已批改数 */
   gradedCount: number
+  attachments?: AssignmentFileInfo[]
   createdAt?: string
   updatedAt?: string
+}
+
+export interface AssignmentFileInfo {
+  id: number
+  fileId: number
+  originalName: string
+  fileSize?: number
+  contentType?: string
+  createdAt?: string
 }
 
 export interface HomeworkAssignmentForm {

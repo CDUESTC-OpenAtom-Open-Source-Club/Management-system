@@ -238,12 +238,16 @@ public class HomeworkSubmissionService {
         // 检查部门权限
         permissionChecker.requireReviewSubmission(member.getDepartment() != null ? member.getDepartment() : "");
 
-        // 积分范围校验
-        if (assignment.getMaxPoints() != null) {
-            if (req.getPoints().compareTo(BigDecimal.ZERO) < 0 ||
-                    req.getPoints().compareTo(assignment.getMaxPoints()) > 0) {
-                throw BizException.of("积分必须在 0 到 " + assignment.getMaxPoints() + " 之间");
-            }
+        // 积分范围校验（后端兜底）：负数永远拒绝；有最大积分时再校验上限
+        if (req.getPoints() == null) {
+            throw BizException.of("积分不能为空");
+        }
+        if (req.getPoints().compareTo(BigDecimal.ZERO) < 0) {
+            throw BizException.of("积分不能小于 0");
+        }
+        if (assignment.getMaxPoints() != null
+                && req.getPoints().compareTo(assignment.getMaxPoints()) > 0) {
+            throw BizException.of("积分不能超过最大积分 " + assignment.getMaxPoints());
         }
 
         ActorContext actor = ActorHolder.get();

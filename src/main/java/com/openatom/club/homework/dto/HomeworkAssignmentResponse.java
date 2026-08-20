@@ -4,6 +4,8 @@ import com.openatom.club.homework.entity.HomeworkAssignment;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 public class HomeworkAssignmentResponse {
@@ -21,9 +23,13 @@ public class HomeworkAssignmentResponse {
     private String pointItemName;
     private Long createdByUserId;
     private String createdByName;
+    /** 所有有效提交总数（含已批改），即「提交人数」；批改不会使其减少 */
     private long submissionCount;
+    /** 当前仍处于 SUBMITTED 状态的数量，即「待批改」；成员视角「我的作业」被覆盖为「本人是否已提交 0/1」 */
     private long submittedCount;
+    /** 已批改（GRADED）数量 */
     private long gradedCount;
+    private List<HomeworkAssignmentFileResponse> attachments = new ArrayList<>();
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 

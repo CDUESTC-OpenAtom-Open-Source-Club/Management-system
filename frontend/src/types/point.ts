@@ -54,31 +54,40 @@ export interface PointRecord {
   createdAt?: string
 }
 
-export interface PointsTableColumn {
-  pointItemId: number
-  itemName: string
-  pointValue: number
-}
-
 export interface PointsTableRow {
   rankNo: number
   memberId: number
   name: string
-  studentNo: string
-  phone: string
-  major: string
-  department: string
-  position: string
-  scores: Record<string, number>
+  studentNo?: string
   totalScore: number
+  activityScore: number
+  competitionScore: number
+  openSourceLearningScore: number
+  communityContributionScore: number
+  speechHostingScore: number
+  otherScore: number
 }
 
 export interface PointsTableResponse {
-  columns: PointsTableColumn[]
   rows: PointsTableRow[]
   page: number
   size: number
   total: number
+}
+
+export interface PointDetail {
+  id: number
+  memberId: number
+  pointItemId?: number
+  pointItemName?: string
+  pointItemType?: PointItemType
+  score: number
+  sourceType: 'APPLICATION' | 'MANUAL' | 'HOMEWORK'
+  sourceLabel?: string
+  reason?: string
+  operatorName?: string
+  occurredAt?: string
+  createdAt?: string
 }
 
 export interface SearchPositionResponse {

@@ -1,18 +1,21 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
-  Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, Space, message, Popconfirm, Segmented
+  Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, Space, message, Popconfirm, Segmented, Upload
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import type { UploadFile } from 'antd'
 import {
-  PlusOutlined, EditOutlined, SendOutlined, StopOutlined, DeleteOutlined
+  PlusOutlined, EditOutlined, SendOutlined, StopOutlined, DeleteOutlined, InboxOutlined, DownloadOutlined
 } from '@ant-design/icons'
 import PageContainer from '../../components/PageContainer'
 import {
   listAssignments, createAssignment, updateAssignment,
-  publishAssignment, closeAssignment, deleteAssignment
+  publishAssignment, closeAssignment, deleteAssignment, batchDeleteAssignments,
+  listAssignmentFiles, deleteAssignmentFile, uploadAssignmentFiles, getAssignmentFileDownloadUrl
 } from '../../api/homework'
 import { getCurrentUser } from '../../utils/auth'
-import type { HomeworkAssignment, HomeworkAssignmentForm } from '../../types/homework'
+import { downloadFile } from '../../utils/download'
+import type { HomeworkAssignment, HomeworkAssignmentForm, AssignmentFileInfo } from '../../types/homework'
 import { getCohorts } from '../../api/cohort'
 import type { Cohort } from '../../types/cohort'
 import CohortSelect from '../../components/CohortSelect'
@@ -29,6 +32,9 @@ const HomeworkManagement: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [cohorts, setCohorts] = useState<Cohort[]>([])
   const [activeCohort, setActiveCohort] = useState<string>('all')
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [fileList, setFileList] = useState<UploadFile[]>([])
+  const [existingFiles, setExistingFiles] = useState<AssignmentFileInfo[]>([])
   const [form] = Form.useForm()
 
   const currentUser = getCurrentUser()
@@ -51,6 +57,8 @@ const HomeworkManagement: React.FC = () => {
   const handleCreate = () => {
     setEditingId(null)
     form.resetFields()
+    setFileList([])
+    setExistingFiles([])
     // 部长默认设置自己部门
     if (isMinister) {
       form.setFieldsValue({ targetType: 'DEPARTMENT', targetDepartment: ministerDept })
@@ -74,7 +82,21 @@ const HomeworkManagement: React.FC = () => {
       deadline: dayjs(item.deadline),
       maxPoints: item.maxPoints,
     })
+    setFileList([])
+    setExistingFiles([])
     setModalOpen(true)
+    listAssignmentFiles(item.id).then(setExistingFiles).catch(() => setExistingFiles([]))
+  }
+
+  const handleDeleteExistingFile = async (file: AssignmentFileInfo) => {
+    if (!editingId) return
+    try {
+      await deleteAssignmentFile(editingId, file.fileId)
+      message.success('附件已删除')
+      setExistingFiles(prev => prev.filter(f => f.fileId !== file.fileId))
+    } catch (e: unknown) {
+      message.error((e as Error)?.message || '删除失败')
+    }
   }
 
   const handleSave = async () => {
@@ -90,11 +112,26 @@ const HomeworkManagement: React.FC = () => {
         deadline: values.deadline.toISOString(),
         maxPoints: values.maxPoints,
       }
+      const newFiles = fileList.filter(f => f.originFileObj).map(f => f.originFileObj!)
       if (editingId) {
         await updateAssignment(editingId, data)
+        if (newFiles.length > 0) {
+          try {
+            await uploadAssignmentFiles(editingId, newFiles)
+          } catch {
+            message.warning('作业已更新，但部分附件上传失败，请重新上传')
+          }
+        }
         message.success('作业已更新')
       } else {
-        await createAssignment(data)
+        const created = await createAssignment(data)
+        if (newFiles.length > 0) {
+          try {
+            await uploadAssignmentFiles(created.id, newFiles)
+          } catch {
+            message.warning('作业已创建，但有附件上传失败，请进入编辑页面重新上传')
+          }
+        }
         message.success('作业已创建')
       }
       setModalOpen(false)
@@ -135,6 +172,18 @@ const HomeworkManagement: React.FC = () => {
     }
   }
 
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) return
+    try {
+      await batchDeleteAssignments(selectedRowKeys.map(Number))
+      message.success(`已批量删除 ${selectedRowKeys.length} 个作业`)
+      setSelectedRowKeys([])
+      fetchAssignments()
+    } catch (e: unknown) {
+      message.error((e as Error)?.message || '批量删除失败')
+    }
+  }
+
   const statusMap: Record<string, { color: string; text: string }> = {
     DRAFT: { color: 'default', text: '草稿' },
     PUBLISHED: { color: 'blue', text: '已发布' },
@@ -154,7 +203,7 @@ const HomeworkManagement: React.FC = () => {
       render: (v: number | undefined) => v != null ? `${v} 分` : '不限' },
     { title: '提交/已批', key: 'counts', width: 100,
       render: (_: unknown, r: HomeworkAssignment) =>
-        `${r.submittedCount ?? 0} / ${r.gradedCount ?? 0}` },
+        `${r.submissionCount ?? 0} / ${r.gradedCount ?? 0}` },
     { title: '状态', dataIndex: 'status', width: 90,
       render: (v: string) => {
         const cfg = statusMap[v] || { color: 'default', text: v }
@@ -173,11 +222,13 @@ const HomeworkManagement: React.FC = () => {
             <Button type="link" size="small" icon={<StopOutlined />}
               onClick={() => handleClose(r.id)}>关闭</Button>
           )}
-          {r.gradedCount === 0 && (
-            <Popconfirm title="确定删除该作业？" onConfirm={() => handleDelete(r.id)}>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
-            </Popconfirm>
-          )}
+          <Popconfirm
+            title={r.gradedCount > 0 ? '该作业已有批改记录，删除会同时收回成员积分，确定删除？' : '确定删除该作业？'}
+            onConfirm={() => handleDelete(r.id)}
+            okText="删除" cancelText="取消"
+          >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+          </Popconfirm>
         </Space>
       )},
   ]
@@ -194,9 +245,24 @@ const HomeworkManagement: React.FC = () => {
         style={{ marginBottom: 16 }}
       />
       <div style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>创建作业</Button>
+        <Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>创建作业</Button>
+          <Popconfirm
+            title={`确定删除选中的 ${selectedRowKeys.length} 个作业？`}
+            onConfirm={handleBatchDelete}
+            okText="删除" cancelText="取消"
+            disabled={selectedRowKeys.length === 0}
+          >
+            <Button danger icon={<DeleteOutlined />} disabled={selectedRowKeys.length === 0}>批量删除</Button>
+          </Popconfirm>
+        </Space>
       </div>
-      <Table columns={columns} dataSource={assignments} rowKey="id"
+      <Table
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+        }}
+        columns={columns} dataSource={assignments} rowKey="id"
         loading={loading} pagination={false} scroll={{ x: 1000 }} />
 
       {/* 创建/编辑 Modal */}
@@ -210,6 +276,33 @@ const HomeworkManagement: React.FC = () => {
           </Form.Item>
           <Form.Item name="description" label="作业要求">
             <TextArea rows={4} placeholder="输入作业详细说明" maxLength={5000} showCount />
+          </Form.Item>
+          <Form.Item label="作业附件（选填）">
+            {editingId && existingFiles.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                {existingFiles.map(f => (
+                  <div key={f.fileId} style={{ display: 'flex', alignItems: 'center' }}>
+                    <Button type="link" size="small" icon={<DownloadOutlined />}
+                      onClick={() => downloadFile(getAssignmentFileDownloadUrl(editingId, f.fileId), f.originalName)}>
+                      {f.originalName}
+                    </Button>
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />}
+                      onClick={() => handleDeleteExistingFile(f)}>删除</Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Upload.Dragger
+              multiple
+              fileList={fileList}
+              beforeUpload={() => false}
+              onChange={({ fileList: fl }) => setFileList(fl)}
+              maxCount={10}
+            >
+              <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+              <p className="ant-upload-text">点击或拖拽文件到此处上传</p>
+              <p className="ant-upload-hint">支持 PDF、Word、PPT、Excel、文本、ZIP 等格式，可不上传</p>
+            </Upload.Dragger>
           </Form.Item>
           <Form.Item name="cohortId" label="届次" rules={[{ required: true, message: '请选择届次' }]}>
             <CohortSelect placeholder="请选择届次" />

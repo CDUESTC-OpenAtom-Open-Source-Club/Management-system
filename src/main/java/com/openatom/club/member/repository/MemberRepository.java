@@ -22,6 +22,12 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     List<Member> findAllByIdInAndDeletedAtIsNull(List<Long> ids);
 
+    List<Member> findAllByDeletedAtIsNullOrderByIdAsc();
+
+    List<Member> findAllByCohortIdAndDeletedAtIsNullOrderByIdAsc(Long cohortId);
+
+    List<Member> findAllByCohortIdIsNullAndDeletedAtIsNullOrderByIdAsc();
+
     boolean existsByStudentNoAndDeletedAtIsNullAndIdNot(String studentNo, Long id);
 
     long countByDeletedAtIsNull();

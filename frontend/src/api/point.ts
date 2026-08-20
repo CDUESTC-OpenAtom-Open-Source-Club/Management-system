@@ -5,6 +5,7 @@ import type {
   PointItemForm,
   PointApplication,
   PointRecord,
+  PointDetail,
   PointsTableResponse,
   SearchPositionResponse,
   PointRecordForm,
@@ -80,8 +81,14 @@ export function searchPointTablePosition(params: {
 }
 
 // ── 积分记录 ──────────────────────────────────────────────
-export function getMemberPointRecords(memberId: number): Promise<PointRecord[]> {
-  return request.get(`/api/members/${memberId}/point-records`)
+export function getMemberPointDetails(params: {
+  memberId: number
+  page?: number
+  size?: number
+}): Promise<PageResult<PointDetail>> {
+  return request.get(`/api/points/members/${params.memberId}/details`, {
+    params: { page: params.page, size: params.size },
+  })
 }
 
 export function createMemberPointRecord(

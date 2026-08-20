@@ -13,7 +13,6 @@ const MODULE_OPTIONS = [
   { label: '全部', value: '' },
   { label: 'member（成员）', value: 'member' },
   { label: 'point（积分）', value: 'point' },
-  { label: 'archive（归档）', value: 'archive' },
   { label: 'meeting（会议）', value: 'meeting' },
   { label: 'finance（财务）', value: 'finance' },
   { label: 'file（文件）', value: 'file' },

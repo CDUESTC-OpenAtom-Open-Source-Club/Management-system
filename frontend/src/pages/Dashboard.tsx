@@ -6,7 +6,6 @@ import {
   FormOutlined,
   CheckCircleOutlined,
   TableOutlined,
-  FolderOpenOutlined,
   FileTextOutlined,
   AccountBookOutlined,
   AuditOutlined,
@@ -26,7 +25,6 @@ import { cohortLabel } from '../utils/cohort'
 import logo from '../assets/logo.png'
 import banner1 from '../assets/banner-operations.svg'
 import banner2 from '../assets/banner-operations.svg'
-import banner3 from '../assets/banner-operations.svg'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -47,14 +45,6 @@ const introSlides = [
     to: '/point-applications',
     image: banner2,
   },
-  {
-    key: '3',
-    title: '会议纪要与活动归档',
-    desc: '会议纪要、活动归档、财务台账与日志统一收口。',
-    action: '查看资料归档',
-    to: '/archive-links',
-    image: banner3,
-  },
 ]
 
 const toolbox = [
@@ -63,7 +53,6 @@ const toolbox = [
   { label: '积分项目管理', to: '/point-items', icon: <TrophyOutlined />, managerOnly: true },
   { label: '积分审核', to: '/point-applications', icon: <CheckCircleOutlined />, managerOnly: true },
   { label: '我的资料', to: '/my-profile', icon: <FormOutlined /> },
-  { label: '活动资料归档', to: '/archive-links', icon: <FolderOpenOutlined /> },
   { label: '会议纪要', to: '/meeting-minutes', icon: <FileTextOutlined /> },
   { label: '财务台账', to: '/finance', icon: <AccountBookOutlined />, managerOnly: true },
   { label: '操作日志', to: '/operation-logs', icon: <AuditOutlined />, managerOnly: true },
@@ -107,7 +96,6 @@ const Dashboard: React.FC = () => {
     { title: '社团成员总数', value: stats.totalMembers, icon: <TeamOutlined />, color: '#2f6bff', trend: '实时统计' },
     { title: '积分项目数量', value: stats.totalPointItems, icon: <TrophyOutlined />, color: '#f59e0b', trend: '实时统计' },
     { title: '待审核登记数', value: stats.pendingApplications, icon: <CheckCircleOutlined />, color: stats.pendingApplications > 0 ? '#ef4444' : '#19a974', trend: stats.pendingApplications > 0 ? '需优先处理' : '暂无待审' },
-    { title: '活动资料数', value: stats.totalArchiveLinks, icon: <FolderOpenOutlined />, color: '#0ea5e9', trend: '实时统计' },
     { title: '会议纪要数', value: stats.totalMeetingMinutes, icon: <FileTextOutlined />, color: '#8b5cf6', trend: '实时统计' },
     { title: '财务月份数', value: stats.totalFinancePeriods, icon: <AccountBookOutlined />, color: '#19a974', trend: '实时统计' },
   ] : []

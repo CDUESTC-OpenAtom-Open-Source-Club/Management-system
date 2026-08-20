@@ -1,6 +1,8 @@
 package com.openatom.club.point.controller;
 
 import com.openatom.club.common.response.ApiResponse;
+import com.openatom.club.common.response.PageResult;
+import com.openatom.club.point.dto.PointDetailResponse;
 import com.openatom.club.point.dto.PointTableResult;
 import com.openatom.club.point.dto.SearchPositionResult;
 import com.openatom.club.point.service.PointTableService;
@@ -16,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 public class PointTableController {
     private final PointTableService pointTableService;
 
-    @Operation(summary = "获取积分表（动态列，cohortId: 空=全部，-1=未分届）")
+    @Operation(summary = "获取积分表（按 PointItem.type 固定六类，cohortId: 空=全部，-1=未分届）")
     @GetMapping("/table")
     public ApiResponse<PointTableResult> getTable(
             @RequestParam(defaultValue = "1") int page,
@@ -24,6 +26,15 @@ public class PointTableController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long cohortId) {
         return ApiResponse.success(pointTableService.getTable(page, size, keyword, cohortId));
+    }
+
+    @Operation(summary = "查看成员积分明细（仅 fullAccess，分页）")
+    @GetMapping("/members/{memberId}/details")
+    public ApiResponse<PageResult<PointDetailResponse>> memberDetails(
+            @PathVariable Long memberId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ApiResponse.success(pointTableService.listMemberDetails(memberId, page, size));
     }
 
     @Operation(summary = "搜索成员在积分表中的位置")

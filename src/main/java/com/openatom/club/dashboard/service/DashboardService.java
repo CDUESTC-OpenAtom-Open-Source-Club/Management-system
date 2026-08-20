@@ -1,6 +1,5 @@
 package com.openatom.club.dashboard.service;
 
-import com.openatom.club.archive.repository.ArchiveLinkRepository;
 import com.openatom.club.auth.repository.UserAccountRepository;
 import com.openatom.club.dashboard.dto.DashboardStatsResponse;
 import com.openatom.club.finance.repository.FinancePeriodRepository;
@@ -28,7 +27,6 @@ public class DashboardService {
     private final MemberRepository memberRepository;
     private final PointItemRepository pointItemRepository;
     private final PointApplicationRepository pointApplicationRepository;
-    private final ArchiveLinkRepository archiveLinkRepository;
     private final MeetingMinutesRepository meetingMinutesRepository;
     private final FinancePeriodRepository financePeriodRepository;
     private final OperationLogRepository operationLogRepository;
@@ -39,7 +37,6 @@ public class DashboardService {
         long totalMembers = countMembersByCohort(cohortId);
         long totalPointItems = pointItemRepository.countByDeletedAtIsNull();
         long pendingApplications = pointApplicationRepository.countByStatusAndCohortIdAndDeletedAtIsNull("PENDING", cohortId);
-        long totalArchiveLinks = archiveLinkRepository.countByDeletedAtIsNull();
         long totalMeetingMinutes = meetingMinutesRepository.countByDeletedAtIsNull();
         long totalFinancePeriods = financePeriodRepository.count();
 
@@ -88,7 +85,6 @@ public class DashboardService {
                 .totalMembers(totalMembers)
                 .totalPointItems(totalPointItems)
                 .pendingApplications(pendingApplications)
-                .totalArchiveLinks(totalArchiveLinks)
                 .totalMeetingMinutes(totalMeetingMinutes)
                 .totalFinancePeriods(totalFinancePeriods)
                 .departmentDistribution(departmentDistribution)

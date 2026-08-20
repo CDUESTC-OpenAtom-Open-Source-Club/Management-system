@@ -1,7 +1,7 @@
 import request from './request'
 import { getToken } from '../utils/auth'
 import type { PageResult } from '../types/common'
-import type { HomeworkAssignment, HomeworkSubmission, GradeRequest } from '../types/homework'
+import type { HomeworkAssignment, HomeworkSubmission, GradeRequest, AssignmentFileInfo } from '../types/homework'
 
 // ---- 作业管理 ----
 
@@ -67,6 +67,47 @@ export function closeAssignment(id: number) {
 /** 删除作业 */
 export function deleteAssignment(id: number) {
   return request.delete<unknown, void>(`/api/homeworks/${id}`)
+}
+
+/** 批量删除作业 */
+export function batchDeleteAssignments(ids: number[]) {
+  return request.post<unknown, number>('/api/homeworks/batch-delete', { ids })
+}
+
+// ---- 作业发布附件 ----
+
+/** 上传作业发布附件（multipart/form-data，原生 fetch） */
+export async function uploadAssignmentFiles(assignmentId: number, files: File[]): Promise<AssignmentFileInfo[]> {
+  const token = getToken()
+  const formData = new FormData()
+  files.forEach((f) => formData.append('files', f))
+  const resp = await fetch(`/api/homeworks/${assignmentId}/files`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  })
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ message: '上传失败' }))
+    throw new Error(err.message || '上传失败')
+  }
+  const json = await resp.json()
+  if (json.code !== 0) throw new Error(json.message || '上传失败')
+  return json.data
+}
+
+/** 列出作业发布附件 */
+export function listAssignmentFiles(assignmentId: number) {
+  return request.get<unknown, AssignmentFileInfo[]>(`/api/homeworks/${assignmentId}/files`)
+}
+
+/** 删除作业发布附件 */
+export function deleteAssignmentFile(assignmentId: number, fileId: number) {
+  return request.delete<unknown, void>(`/api/homeworks/${assignmentId}/files/${fileId}`)
+}
+
+/** 下载作业发布附件 URL */
+export function getAssignmentFileDownloadUrl(assignmentId: number, fileId: number) {
+  return `/api/homeworks/${assignmentId}/files/${fileId}/download`
 }
 
 // ---- 提交与批改 ----

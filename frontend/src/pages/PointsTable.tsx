@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import {
   Table, Input, Button, Space, Tag, Modal, Form,
   InputNumber, Select, DatePicker, Popconfirm, message,
-  Typography, Card, Alert, Segmented,
+  Typography, Card, Alert, Segmented, Drawer, Descriptions,
 } from 'antd'
 import {
   SearchOutlined, AimOutlined, LeftOutlined, RightOutlined,
@@ -13,18 +13,17 @@ import dayjs from 'dayjs'
 import PageContainer from '../components/PageContainer'
 import {
   getPointsTable, searchPointTablePosition,
-  getMemberPointRecords, createMemberPointRecord,
+  getMemberPointDetails, createMemberPointRecord,
   updatePointRecord, deletePointRecord,
   getPointItems,
 } from '../api/point'
 import type {
-  PointsTableColumn, PointsTableRow, SearchPositionResponse,
-  PointRecord, PointRecordForm,
+  PointsTableRow, SearchPositionResponse, PointDetail, PointRecordForm,
 } from '../types/point'
 import type { PointItem } from '../types/point'
 import { getCohorts } from '../api/cohort'
 import type { Cohort } from '../types/cohort'
-import { canManage } from '../utils/permission'
+import { isFullAccess } from '../utils/permission'
 
 const { Text } = Typography
 const UNASSIGNED = 'unassigned'
@@ -32,7 +31,6 @@ const UNASSIGNED = 'unassigned'
 const PointsTable: React.FC = () => {
   // ─── 积分总表 ────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
-  const [columns, setColumns] = useState<PointsTableColumn[]>([])
   const [rows, setRows] = useState<PointsTableRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -50,12 +48,14 @@ const PointsTable: React.FC = () => {
   const [highlightedMemberId, setHighlightedMemberId] = useState<number | null>(null)
   const [locating, setLocating] = useState(false)
 
-  // ─── 积分明细 Modal ──────────────────────────────────────
+  // ─── 积分明细 Drawer（仅 fullAccess） ─────────────────────
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailMember, setDetailMember] = useState<PointsTableRow | null>(null)
-  const [detailRecords, setDetailRecords] = useState<PointRecord[]>([])
+  const [detailRecords, setDetailRecords] = useState<PointDetail[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
-  const [pointItems, setPointItems] = useState<PointItem[]>([])
+  const [detailPage, setDetailPage] = useState(1)
+  const [detailTotal, setDetailTotal] = useState(0)
+  const [detailPageSize] = useState(10)
 
   // ─── 新增积分 Modal ──────────────────────────────────────
   const [addPointOpen, setAddPointOpen] = useState(false)
@@ -65,18 +65,23 @@ const PointsTable: React.FC = () => {
 
   // ─── 编辑积分记录 Modal ───────────────────────────────────
   const [editRecordOpen, setEditRecordOpen] = useState(false)
-  const [editingRecord, setEditingRecord] = useState<PointRecord | null>(null)
+  const [editingRecord, setEditingRecord] = useState<PointDetail | null>(null)
   const [editRecordForm] = Form.useForm<PointRecordForm>()
   const [editSubmitting, setEditSubmitting] = useState(false)
 
+  const [pointItems, setPointItems] = useState<PointItem[]>([])
+
   const cohortId = activeCohort === null ? undefined : activeCohort === UNASSIGNED ? -1 : Number(activeCohort)
+
+  const activeCohortLabel = activeCohort === UNASSIGNED
+    ? '未分届'
+    : `${cohorts.find((c) => String(c.id) === activeCohort)?.year ?? ''}届`
 
   const fetchTable = useCallback(async (targetPage = page) => {
     if (activeCohort === null) return
     setLoading(true)
     try {
       const res = await getPointsTable({ page: targetPage, size: pageSize, keyword, cohortId })
-      setColumns(res.columns ?? [])
       setRows(res.rows ?? [])
       setTotal(res.total ?? 0)
     } finally {
@@ -129,28 +134,27 @@ const PointsTable: React.FC = () => {
     if (locateKeyword) handleLocate(0)
   }, [locateKeyword]) // eslint-disable-line
 
-  // ─── 查看明细 ────────────────────────────────────────────
-  const openDetail = async (record: PointsTableRow) => {
+  // ─── 查看明细（仅 fullAccess） ────────────────────────────
+  const loadDetail = useCallback(async (memberId: number, targetPage: number) => {
+    setDetailLoading(true)
+    try {
+      const res = await getMemberPointDetails({ memberId, page: targetPage, size: detailPageSize })
+      setDetailRecords(res.list ?? [])
+      setDetailTotal(res.total ?? 0)
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [detailPageSize])
+
+  const openDetail = (record: PointsTableRow) => {
     setDetailMember(record)
     setDetailOpen(true)
-    setDetailLoading(true)
-    try {
-      const records = await getMemberPointRecords(record.memberId)
-      setDetailRecords(records ?? [])
-    } finally {
-      setDetailLoading(false)
-    }
+    setDetailPage(1)
+    loadDetail(record.memberId, 1)
   }
 
-  const refreshDetail = async () => {
-    if (!detailMember) return
-    setDetailLoading(true)
-    try {
-      const records = await getMemberPointRecords(detailMember.memberId)
-      setDetailRecords(records ?? [])
-    } finally {
-      setDetailLoading(false)
-    }
+  const refreshDetail = () => {
+    if (detailMember) loadDetail(detailMember.memberId, detailPage)
   }
 
   // ─── 新增积分 ────────────────────────────────────────────
@@ -184,10 +188,12 @@ const PointsTable: React.FC = () => {
   }
 
   // ─── 编辑积分记录 ─────────────────────────────────────────
-  const openEditRecord = (record: PointRecord) => {
+  const openEditRecord = (record: PointDetail) => {
     setEditingRecord(record)
     editRecordForm.setFieldsValue({
-      ...record,
+      pointItemId: record.pointItemId,
+      score: record.score,
+      reason: record.reason,
       occurredAt: record.occurredAt ? (dayjs(record.occurredAt) as unknown as string) : undefined,
     })
     setEditRecordOpen(true)
@@ -221,86 +227,69 @@ const PointsTable: React.FC = () => {
     fetchTable()
   }
 
-  // ─── 构建动态列 ───────────────────────────────────────────
+  // ─── 分值单元格：正数绿、负数红、零灰 ───────────────────────
+  const scoreCell = (v: number) => {
+    if (v === 0) return <Text type="secondary">0</Text>
+    return <Text style={{ color: v > 0 ? '#389e0d' : '#cf1322' }}>{v}</Text>
+  }
+
+  // ─── 固定列 ───────────────────────────────────────────────
   const tableColumns: ColumnsType<PointsTableRow> = [
     {
-      title: '排名', dataIndex: 'rankNo', width: 65, fixed: 'left',
+      title: '排名', dataIndex: 'rankNo', width: 64, fixed: 'left',
       render: (v: number) => (
         <Text strong style={{ color: v <= 3 ? '#f50' : undefined }}>{v}</Text>
-      )
-    },
-    { title: '姓名', dataIndex: 'name', width: 85, fixed: 'left' },
-    { title: '学号', dataIndex: 'studentNo', width: 115 },
-    { title: '联系电话', dataIndex: 'phone', width: 130 },
-    { title: '专业', dataIndex: 'major', width: 120, ellipsis: true },
-    { title: '部门', dataIndex: 'department', width: 90 },
-    { title: '职务', dataIndex: 'position', width: 80 },
-    ...columns.map((col) => ({
-      title: (
-        <div style={{ textAlign: 'center' as const }}>
-          <div style={{ fontSize: 12, fontWeight: 600 }}>{col.itemName}</div>
-          <div style={{ fontSize: 11, color: '#888' }}>+{col.pointValue}</div>
-        </div>
       ),
-      key: `col_${col.pointItemId}`,
-      width: 90,
-      align: 'center' as const,
-      render: (_: unknown, row: PointsTableRow) => {
-        const score = row.scores?.[String(col.pointItemId)] ?? 0
-        return score > 0 ? <Tag color="blue">{score}</Tag> : <span style={{ color: '#ccc' }}>0</span>
-      },
-    })),
+    },
+    { title: '姓名', dataIndex: 'name', width: 90, fixed: 'left' },
     {
-      title: '总分', dataIndex: 'totalScore', width: 80, fixed: 'right',
+      title: '总分', dataIndex: 'totalScore', width: 90, align: 'center',
       render: (v: number) => (
         <Text strong style={{ color: '#1677ff', fontSize: 16 }}>{v}</Text>
-      )
+      ),
     },
-    {
-      title: '操作', width: canManage() ? 170 : 90, fixed: 'right',
+    { title: '活动', dataIndex: 'activityScore', width: 80, align: 'center', render: scoreCell },
+    { title: '比赛', dataIndex: 'competitionScore', width: 80, align: 'center', render: scoreCell },
+    { title: '开源学习', dataIndex: 'openSourceLearningScore', width: 92, align: 'center', render: scoreCell },
+    { title: '社区贡献', dataIndex: 'communityContributionScore', width: 92, align: 'center', render: scoreCell },
+    { title: '演讲或主持', dataIndex: 'speechHostingScore', width: 96, align: 'center', render: scoreCell },
+    { title: '其他', dataIndex: 'otherScore', width: 72, align: 'center', render: scoreCell },
+    ...(isFullAccess() ? [{
+      title: '操作', width: 150, fixed: 'right' as const,
       render: (_: unknown, record: PointsTableRow) => (
         <Space size={4}>
           <Button size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
             明细
           </Button>
-          {canManage() && (
-            <Button
-              size="small" type="primary" icon={<PlusOutlined />}
-              onClick={() => openAddPoint(record)}
-            >
-              加分
-            </Button>
-          )}
+          <Button
+            size="small" type="primary" icon={<PlusOutlined />}
+            onClick={() => openAddPoint(record)}
+          >
+            加分
+          </Button>
         </Space>
       ),
-    },
+    }] : []),
   ]
 
-  const detailColumns: ColumnsType<PointRecord> = [
+  const detailColumns: ColumnsType<PointDetail> = [
     {
-      title: '时间', dataIndex: 'occurredAt', width: 155,
-      render: (v?: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '—'
+      title: '日期', dataIndex: 'occurredAt', width: 150,
+      render: (v?: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '—',
     },
-    { title: '积分项目', dataIndex: 'itemName', width: 130, render: (v?: string) => v || '手动录入' },
+    { title: '积分项目', dataIndex: 'pointItemName', width: 140, render: (v?: string) => v || '手动录入' },
+    { title: '类型', dataIndex: 'pointItemType', width: 90, render: (v?: string) => v || '其他' },
     {
-      title: '分值', dataIndex: 'score', width: 80,
+      title: '积分', dataIndex: 'score', width: 80,
       render: (v: number) => (
-        <Tag color={v > 0 ? 'green' : 'red'}>{v > 0 ? `+${v}` : v}</Tag>
-      )
+        <Tag color={v > 0 ? 'green' : v < 0 ? 'red' : 'default'}>{v > 0 ? `+${v}` : v}</Tag>
+      ),
     },
-    { title: '原因', dataIndex: 'reason', ellipsis: true },
+    { title: '来源', dataIndex: 'sourceLabel', width: 90, render: (v?: string) => v || '—' },
+    { title: '备注', dataIndex: 'reason', ellipsis: true },
     {
-      title: '来源', dataIndex: 'sourceType', width: 90,
-      render: (v: string) => {
-        if (v === 'APPLICATION') return <Tag>活动登记</Tag>
-        if (v === 'HOMEWORK') return <Tag color="blue">作业</Tag>
-        return <Tag color="orange">手动录入</Tag>
-      }
-    },
-    { title: '操作人', dataIndex: 'operatorName', width: 90 },
-    canManage() ? {
       title: '操作', width: 120,
-      render: (_: unknown, record: PointRecord) => (
+      render: (_: unknown, record: PointDetail) => (
         <Space size={4}>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEditRecord(record)}>编辑</Button>
           <Popconfirm
@@ -312,7 +301,7 @@ const PointsTable: React.FC = () => {
           </Popconfirm>
         </Space>
       ),
-    } : { title: '操作', width: 60, render: () => '—' },
+    },
   ]
 
   const pointItemOptions = pointItems.map((p) => ({ label: `${p.itemName}（+${p.pointValue}）`, value: p.id }))
@@ -414,33 +403,40 @@ const PointsTable: React.FC = () => {
         }}
       />
 
-      {/* 积分明细 Modal */}
-      <Modal
-        title={detailMember ? `${detailMember.name} 的积分明细` : '积分明细'}
+      {/* 积分明细 Drawer（仅 fullAccess 可见，只读 + 分页） */}
+      <Drawer
+        title={detailMember ? `${detailMember.name} - 积分明细` : '积分明细'}
         open={detailOpen}
-        onCancel={() => setDetailOpen(false)}
-        footer={null}
-        width={900}
+        onClose={() => setDetailOpen(false)}
+        width={760}
       >
-        {canManage() && detailMember && (
-          <Button
-            type="primary" icon={<PlusOutlined />} size="small"
-            style={{ marginBottom: 12 }}
-            onClick={() => openAddPoint(detailMember)}
-          >
-            手动新增积分
-          </Button>
+        {detailMember && (
+          <Descriptions size="small" column={2} style={{ marginBottom: 12 }}>
+            <Descriptions.Item label="届次">{activeCohortLabel}</Descriptions.Item>
+            <Descriptions.Item label="总积分">
+              <Text strong style={{ color: '#1677ff' }}>{detailMember.totalScore}</Text>
+            </Descriptions.Item>
+          </Descriptions>
         )}
         <Table
           rowKey="id"
           columns={detailColumns}
           dataSource={detailRecords}
           loading={detailLoading}
-          pagination={{ pageSize: 10 }}
-          scroll={{ x: 700 }}
+          pagination={{
+            current: detailPage,
+            pageSize: detailPageSize,
+            total: detailTotal,
+            showTotal: (t) => `共 ${t} 条`,
+            onChange: (p) => {
+              setDetailPage(p)
+              if (detailMember) loadDetail(detailMember.memberId, p)
+            },
+          }}
+          scroll={{ x: 820 }}
           size="small"
         />
-      </Modal>
+      </Drawer>
 
       {/* 新增积分 Modal */}
       <Modal

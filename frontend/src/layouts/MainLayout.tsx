@@ -9,7 +9,6 @@ import {
   FormOutlined,
   CheckCircleOutlined,
   TableOutlined,
-  FolderOpenOutlined,
   FileTextOutlined,
   AccountBookOutlined,
   AuditOutlined,
@@ -21,6 +20,7 @@ import {
   EditOutlined,
   FileSearchOutlined,
   CalendarOutlined,
+  CloudOutlined,
 } from '@ant-design/icons'
 import { changePassword } from '../api/auth'
 import { canManage, canViewFinance, canViewLogs, isFullAccess, canManageHomework } from '../utils/permission'
@@ -50,7 +50,7 @@ const MainLayout: React.FC = () => {
     { key: '/my-homework', icon: <BookOutlined />, label: '我的作业' },
     { key: '/homework-review', icon: <EditOutlined />, label: '作业批改', show: canManageHomework() },
     { key: '/homework-management', icon: <FileSearchOutlined />, label: '作业管理', show: canManageHomework() },
-    { key: '/archive-links', icon: <FolderOpenOutlined />, label: '活动资料归档' },
+    { key: 'alist', icon: <CloudOutlined />, label: '开源网盘' },
     { key: '/meeting-minutes', icon: <FileTextOutlined />, label: '会议纪要' },
     { key: '/finance', icon: <AccountBookOutlined />, label: '财务台账', show: canViewFinance() },
     { key: '/operation-logs', icon: <AuditOutlined />, label: '操作日志', show: canViewLogs() },
@@ -81,6 +81,24 @@ const MainLayout: React.FC = () => {
     }
   }
 
+  const handleOpenAList = () => {
+    const url = import.meta.env.VITE_ALIST_URL?.trim()
+    if (!url) {
+      message.warning('网盘地址未配置，请联系管理员')
+      return
+    }
+    try {
+      const parsed = new URL(url)
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        message.error('网盘地址配置无效')
+        return
+      }
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      message.error('网盘地址配置无效')
+    }
+  }
+
   const userMenu: MenuProps['items'] = [
     { key: 'profile', label: '我的资料', icon: <IdcardOutlined />, onClick: () => navigate('/my-profile') },
     { key: 'password', label: '修改密码', icon: <KeyOutlined />, onClick: () => { passwordForm.resetFields(); setPasswordModalOpen(true) } },
@@ -102,14 +120,26 @@ const MainLayout: React.FC = () => {
             </div>
           )}
         </div>
-        <Menu theme="dark" mode="inline" selectedKeys={[selectedKey]} items={items} onClick={({ key }) => navigate(key)} />
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[selectedKey]}
+          items={items}
+          onClick={({ key }) => {
+            if (key === 'alist') {
+              handleOpenAList()
+              return
+            }
+            navigate(key)
+          }}
+        />
       </Sider>
 
       <Layout>
         <Header className="app-header">
           <div className="app-header-title">
             <div className="app-header-title-main">工作台</div>
-            <div className="app-header-title-sub">成员管理、积分登记、资料归档与日常办公</div>
+            <div className="app-header-title-sub">成员管理、积分登记、作业管理与日常办公</div>
           </div>
 
           <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight">

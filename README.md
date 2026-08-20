@@ -3,7 +3,7 @@
 
 ## 项目简介
 
-本系统是开放原子开源社团秘书处的综合管理系统，涵盖成员管理、积分管理、作业管理、活动资料归档、会议纪要、财务台账、账号管理与个人资料维护等功能。
+本系统是开放原子开源社团秘书处的综合管理系统，涵盖成员管理、积分管理、作业管理、会议纪要、财务台账、账号管理与个人资料维护等功能；活动资料文件统一通过「开源网盘」管理，系统不再提供活动资料归档模块。
 
 **技术栈：** Java 17 · Spring Boot 3 · PostgreSQL · Flyway · Spring Data JPA · Lombok · springdoc-openapi · Apache POI · React · TypeScript · Vite · Ant Design 5
 
@@ -25,8 +25,8 @@
 
 | 工具 | 版本要求 | 说明 |
 |------|---------|------|
-| Java JDK | 17+ | 已验证 JDK 17.0.6，本机路径：`E:\tooks\JAVA-JDK17.0.6\jdk-17.0.6` |
-| Maven | 3.9+ | 本机路径：`E:\tooks\apache-maven-3.9.6` |
+| Java JDK | 17+ | — |
+| Maven | 3.9+ | — |
 | Node.js | 16+ | 用于运行前端开发服务器 |
 | PostgreSQL | 17+ | 本地服务已启用 |
 
@@ -63,13 +63,7 @@
 在项目根目录执行：
 
 ```cmd
-E:\tooks\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run
-```
-
-也可以显式指定 `JAVA_HOME`：
-
-```cmd
-set JAVA_HOME=E:\tooks\JAVA-JDK17.0.6\jdk-17.0.6 && E:\tooks\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run
+mvn spring-boot:run
 ```
 
 ### 2. 启动前端
@@ -136,20 +130,15 @@ boolean fullAccess = "会长".equals(position)
 - `initialPasswordChanged`
 - `fullAccess`
 
-### 默认账号
+### 账号说明
 
-| 用户名 | 密码 | 说明 |
-|--------|------|------|
-| `lintao` | `123456` | 副会长，全权限，资料已完善 |
-| `LT` | `123456` | 普通社员，用于测试普通成员权限 |
-
-> 密码可在登录后通过右上角用户菜单 →「修改密码」自行更改。
+系统不内置默认账号，账号由管理员通过「账号管理」创建（密码 BCrypt 加密）。登录后可通过右上角用户菜单 →「修改密码」自行更改。
 
 ---
 
 ## 前端页面
 
-系统已完成全部 17 个前端页面：
+系统已完成全部 16 个前端页面：
 
 | 路由 | 页面 | 权限 |
 |------|------|------|
@@ -164,7 +153,6 @@ boolean fullAccess = "会长".equals(position)
 | `/my-homework` | 我的作业（查看、提交、详情） | 登录即可 |
 | `/homework-review` | 作业批改（列表 + 批改弹窗） | 部长 / 全权限 |
 | `/homework-management` | 作业管理（CRUD + 发布/关闭） | 部长 / 全权限 |
-| `/archive-links` | 活动资料归档（CRUD + 年份/类型筛选） | 登录即可 |
 | `/meeting-minutes` | 会议纪要（上传/下载/编辑/删除） | 登录即可 |
 | `/finance` | 财务台账（按月报表 + 凭据上传下载） | 全权限 |
 | `/operation-logs` | 操作日志（分页筛选） | 全权限 |
@@ -212,8 +200,6 @@ boolean fullAccess = "会长".equals(position)
 | 积分记录 | `/api/point-records/{id}` | PUT / DELETE |
 | 积分总表 | `/api/points/table` | GET |
 | 积分总表 | `/api/points/table/search-position` | GET |
-| 归档链接 | `/api/archive-links` | GET / POST |
-| 归档链接 | `/api/archive-links/{id}` | PUT / DELETE |
 | 会议纪要 | `/api/meeting-minutes` | GET / POST |
 | 会议纪要 | `/api/meeting-minutes/{id}` | PUT / DELETE |
 | 会议纪要 | `/api/meeting-minutes/{id}/download` | GET |
@@ -246,13 +232,13 @@ boolean fullAccess = "会长".equals(position)
 ### 后端测试
 
 ```cmd
-E:\tooks\apache-maven-3.9.6\bin\mvn.cmd test
+mvn test
 ```
 
 ### 打包
 
 ```cmd
-E:\tooks\apache-maven-3.9.6\bin\mvn.cmd package
+mvn package
 ```
 
 ### 前端构建
@@ -270,4 +256,3 @@ npm run build
 - 如需本地查看前端效果，请**先启动后端，再启动前端**
 - 访问前端必须通过 `http://localhost:5173`（Vite 代理转发 API 到后端），不要直接打开 `dist/index.html`
 - 登录时如遇"网络错误"提示，请确认后端已启动在 `8080` 端口
-- 权限测试可使用 `LT / 123456`（普通社员），功能测试可使用 `lintao / 123456`（副会长）

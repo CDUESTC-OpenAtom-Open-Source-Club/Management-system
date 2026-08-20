@@ -2,7 +2,6 @@ package com.openatom.club.point.dto;
 
 import lombok.Data;
 import java.math.BigDecimal;
-import java.util.Map;
 
 @Data
 public class PointTableRowDto {
@@ -10,10 +9,14 @@ public class PointTableRowDto {
     private Long memberId;
     private String name;
     private String studentNo;
-    private String phone;
-    private String major;
-    private String department;
-    private String position;
-    private Map<String, BigDecimal> scores;
+
     private BigDecimal totalScore;
+
+    // 按 PointItem.type 聚合的六大分类积分（顺序固定）
+    private BigDecimal activityScore;
+    private BigDecimal competitionScore;
+    private BigDecimal openSourceLearningScore;
+    private BigDecimal communityContributionScore;
+    private BigDecimal speechHostingScore;
+    private BigDecimal otherScore;
 }

@@ -10,6 +10,8 @@ public interface PointItemRepository extends JpaRepository<PointItem, Long> {
     List<PointItem> findAllByDeletedAtIsNullAndEnabledTrueAndAllowMemberApplyTrueOrderBySortOrderAscIdAsc();
     Optional<PointItem> findByIdAndDeletedAtIsNull(Long id);
 
+    List<PointItem> findAllByIdInAndDeletedAtIsNull(List<Long> ids);
+
     Optional<PointItem> findFirstByItemTypeAndDeletedAtIsNullOrderBySortOrderAscIdAsc(String itemType);
 
     long countByDeletedAtIsNull();

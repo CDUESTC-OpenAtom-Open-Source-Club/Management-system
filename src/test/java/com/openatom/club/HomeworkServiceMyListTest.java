@@ -4,9 +4,11 @@ import com.openatom.club.cohort.repository.CohortRepository;
 import com.openatom.club.common.security.ActorContext;
 import com.openatom.club.common.security.ActorHolder;
 import com.openatom.club.common.security.PermissionChecker;
+import com.openatom.club.file.service.FileStorageService;
 import com.openatom.club.homework.dto.HomeworkAssignmentResponse;
 import com.openatom.club.homework.entity.HomeworkAssignment;
 import com.openatom.club.homework.entity.HomeworkSubmission;
+import com.openatom.club.homework.repository.HomeworkAssignmentFileRepository;
 import com.openatom.club.homework.repository.HomeworkAssignmentRepository;
 import com.openatom.club.homework.repository.HomeworkSubmissionRepository;
 import com.openatom.club.homework.service.HomeworkService;
@@ -14,6 +16,7 @@ import com.openatom.club.log.service.OperationLogService;
 import com.openatom.club.member.entity.Member;
 import com.openatom.club.member.repository.MemberRepository;
 import com.openatom.club.point.repository.PointItemRepository;
+import com.openatom.club.point.repository.PointRecordRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,8 +40,11 @@ class HomeworkServiceMyListTest {
 
     @Mock HomeworkAssignmentRepository assignmentRepository;
     @Mock HomeworkSubmissionRepository submissionRepository;
+    @Mock HomeworkAssignmentFileRepository assignmentFileRepository;
+    @Mock FileStorageService fileStorageService;
     @Mock MemberRepository memberRepository;
     @Mock PointItemRepository pointItemRepository;
+    @Mock PointRecordRepository pointRecordRepository;
     @Mock CohortRepository cohortRepository;
     @Mock PermissionChecker permissionChecker;
     @Mock OperationLogService logService;
@@ -51,8 +57,8 @@ class HomeworkServiceMyListTest {
     @BeforeEach
     void setUp() {
         homeworkService = new HomeworkService(assignmentRepository, submissionRepository,
-                memberRepository, pointItemRepository, cohortRepository,
-                permissionChecker, logService);
+                assignmentFileRepository, memberRepository, pointItemRepository, pointRecordRepository,
+                cohortRepository, permissionChecker, logService, fileStorageService);
 
         member = new Member();
         member.setId(10L);

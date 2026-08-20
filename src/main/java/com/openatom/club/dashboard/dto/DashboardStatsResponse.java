@@ -16,7 +16,6 @@ public class DashboardStatsResponse {
     private long totalMembers;
     private long totalPointItems;
     private long pendingApplications;
-    private long totalArchiveLinks;
     private long totalMeetingMinutes;
     private long totalFinancePeriods;
 

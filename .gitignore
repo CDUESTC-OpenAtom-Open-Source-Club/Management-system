@@ -12,3 +12,9 @@ frontend/.env
 .idea/
 *.iml
 .DS_Store
+
+# 开发专用文件（不随开源仓库分发）
+CLAUDE.md
+AGENTS.md
+LOGIN_REFACTOR_SUMMARY.md
+frontend/README-frintend.md

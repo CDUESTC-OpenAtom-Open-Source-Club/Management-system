@@ -7,17 +7,25 @@ import com.openatom.club.common.exception.PermissionDeniedException;
 import com.openatom.club.common.security.ActorContext;
 import com.openatom.club.common.security.ActorHolder;
 import com.openatom.club.common.security.PermissionChecker;
+import com.openatom.club.file.entity.FileRecord;
+import com.openatom.club.file.service.FileStorageService;
+import com.openatom.club.homework.dto.HomeworkAssignmentFileResponse;
 import com.openatom.club.homework.dto.HomeworkAssignmentRequest;
 import com.openatom.club.homework.dto.HomeworkAssignmentResponse;
 import com.openatom.club.homework.entity.HomeworkAssignment;
+import com.openatom.club.homework.entity.HomeworkAssignmentFile;
 import com.openatom.club.homework.entity.HomeworkSubmission;
+import com.openatom.club.homework.repository.HomeworkAssignmentFileRepository;
 import com.openatom.club.homework.repository.HomeworkAssignmentRepository;
 import com.openatom.club.homework.repository.HomeworkSubmissionRepository;
 import com.openatom.club.log.service.OperationLogService;
 import com.openatom.club.member.entity.Member;
 import com.openatom.club.member.repository.MemberRepository;
 import com.openatom.club.point.entity.PointItem;
+import com.openatom.club.point.entity.PointRecord;
 import com.openatom.club.point.repository.PointItemRepository;
+import com.openatom.club.point.repository.PointRecordRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -25,10 +33,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -36,11 +49,21 @@ import java.util.Objects;
 public class HomeworkService {
     private final HomeworkAssignmentRepository assignmentRepository;
     private final HomeworkSubmissionRepository submissionRepository;
+    private final HomeworkAssignmentFileRepository assignmentFileRepository;
     private final MemberRepository memberRepository;
     private final PointItemRepository pointItemRepository;
+    private final PointRecordRepository pointRecordRepository;
     private final CohortRepository cohortRepository;
     private final PermissionChecker permissionChecker;
     private final OperationLogService logService;
+    private final FileStorageService fileStorageService;
+
+    /** 作业发布附件允许的文件类型（管理员/部长发布的资料） */
+    private static final Set<String> ASSIGNMENT_FILE_EXTENSIONS = Set.of(
+            "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx",
+            "txt", "md", "zip", "rar", "7z",
+            "jpg", "jpeg", "png", "gif", "bmp"
+    );
 
     // ==================== 管理端列表 ====================
 
@@ -97,7 +120,9 @@ public class HomeworkService {
         HomeworkAssignment a = assignmentRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> BizException.of("作业不存在"));
         checkAssignmentViewPermission(a);
-        return toResponse(a);
+        HomeworkAssignmentResponse r = toResponse(a);
+        enrichAttachments(r, id);
+        return r;
     }
 
     private void checkAssignmentViewPermission(HomeworkAssignment a) {
@@ -237,16 +262,180 @@ public class HomeworkService {
         HomeworkAssignment a = assignmentRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> BizException.of("作业不存在"));
         validateOwnership(a);
+        deleteAssignmentsInternal(List.of(a));
+    }
 
-        long gradedCount = submissionRepository.countByHomeworkIdAndStatus(a.getId(), "GRADED");
-        if (gradedCount > 0) {
-            throw BizException.of("该作业已有批改记录，无法删除。请先关闭作业或撤销批改");
+    /**
+     * 批量删除作业：全量校验（存在性 + 所有权）后统一级联删除，任一失败整体回滚。
+     */
+    @Transactional
+    public int deleteAssignments(List<Long> ids) {
+        permissionChecker.requireManageHomework();
+        List<Long> distinctIds = ids == null ? List.of()
+                : ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (distinctIds.isEmpty()) {
+            throw BizException.of("请选择要删除的作业");
         }
+        List<HomeworkAssignment> assignments = assignmentRepository
+                .findAllByIdInAndDeletedAtIsNull(distinctIds);
+        if (assignments.size() != distinctIds.size()) {
+            throw BizException.of("存在无效作业，请刷新后重试");
+        }
+        // 全量校验：所有权（任一不满足整体失败）
+        for (HomeworkAssignment a : assignments) {
+            validateOwnership(a);
+        }
+        deleteAssignmentsInternal(assignments);
+        return assignments.size();
+    }
 
-        a.setDeletedAt(OffsetDateTime.now());
-        assignmentRepository.save(a);
-        logService.log("homework", "DELETE", String.valueOf(id),
-                "删除作业: " + a.getTitle());
+    /**
+     * 级联删除：软删除作业 + 其批改产生的积分记录（HOMEWORK），并清空提交的 point_record_id。
+     */
+    private void deleteAssignmentsInternal(List<HomeworkAssignment> assignments) {
+        List<Long> homeworkIds = assignments.stream().map(HomeworkAssignment::getId).toList();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        // 1) 级联清理：软删除批改积分记录 + 清空提交的积分引用
+        List<HomeworkSubmission> submissions = submissionRepository
+                .findAllByHomeworkIdInAndDeletedAtIsNull(homeworkIds);
+        List<Long> pointRecordIds = submissions.stream()
+                .map(HomeworkSubmission::getPointRecordId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        int deletedPointCount = 0;
+        if (!pointRecordIds.isEmpty()) {
+            List<PointRecord> records = pointRecordRepository.findAllByIdInAndDeletedAtIsNull(pointRecordIds);
+            for (PointRecord r : records) {
+                r.setDeletedAt(now);
+            }
+            pointRecordRepository.saveAll(records);
+            deletedPointCount = records.size();
+        }
+        for (HomeworkSubmission s : submissions) {
+            if (s.getPointRecordId() != null) {
+                s.setPointRecordId(null);
+            }
+        }
+        submissionRepository.saveAll(submissions);
+
+        // 2) 级联软删除发布附件关系 + 文件记录
+        List<HomeworkAssignmentFile> assignmentFiles = assignmentFileRepository
+                .findAllByAssignmentIdInAndDeletedAtIsNull(homeworkIds);
+        for (HomeworkAssignmentFile af : assignmentFiles) {
+            af.setDeletedAt(now);
+            fileStorageService.softDeleteFileRecord(af.getFileId());
+        }
+        assignmentFileRepository.saveAll(assignmentFiles);
+
+        // 3) 软删除作业
+        for (HomeworkAssignment a : assignments) {
+            a.setDeletedAt(now);
+        }
+        assignmentRepository.saveAll(assignments);
+
+        // 4) 操作日志
+        if (assignments.size() == 1) {
+            HomeworkAssignment a = assignments.get(0);
+            logService.log("homework", "DELETE", String.valueOf(a.getId()),
+                    "删除作业: " + a.getTitle() + "，级联删除积分记录 " + deletedPointCount + " 条");
+        } else {
+            String titles = assignments.stream().map(HomeworkAssignment::getTitle)
+                    .limit(10).collect(Collectors.joining("、"));
+            if (assignments.size() > 10) {
+                titles += " 等";
+            }
+            logService.log("homework", "DELETE", "批量:" + assignments.size() + "个",
+                    "批量删除作业 " + assignments.size() + " 个（" + titles + "），级联删除积分记录 " + deletedPointCount + " 条");
+        }
+    }
+
+    // ==================== 作业发布附件 ====================
+
+    /** 列出作业发布附件：成员（非草稿+同届+范围内）与管理员/部长均可查看 */
+    public List<HomeworkAssignmentFileResponse> listAssignmentFiles(Long assignmentId) {
+        HomeworkAssignment a = assignmentRepository.findByIdAndDeletedAtIsNull(assignmentId)
+                .orElseThrow(() -> BizException.of("作业不存在"));
+        checkAssignmentViewPermission(a);
+        return assignmentFileRepository.findAllByAssignmentIdAndDeletedAtIsNull(assignmentId)
+                .stream().map(this::toFileResponse).toList();
+    }
+
+    /** 上传作业发布附件：fullAccess 或部长（本部门，届次自由） */
+    @Transactional
+    public List<HomeworkAssignmentFileResponse> uploadAssignmentFiles(Long assignmentId,
+                                                                       List<MultipartFile> files) throws IOException {
+        permissionChecker.requireManageHomework();
+        HomeworkAssignment a = assignmentRepository.findByIdAndDeletedAtIsNull(assignmentId)
+                .orElseThrow(() -> BizException.of("作业不存在"));
+        validateOwnership(a);
+
+        List<HomeworkAssignmentFileResponse> results = new ArrayList<>();
+        if (files != null) {
+            for (MultipartFile file : files) {
+                if (file.isEmpty()) continue;
+                FileRecord record = fileStorageService.saveFile(file, "homework-assignment",
+                        "homework-assignment/" + assignmentId, ASSIGNMENT_FILE_EXTENSIONS);
+                HomeworkAssignmentFile af = new HomeworkAssignmentFile();
+                af.setAssignmentId(assignmentId);
+                af.setFileId(record.getId());
+                assignmentFileRepository.save(af);
+                results.add(toFileResponse(af));
+            }
+        }
+        if (!results.isEmpty()) {
+            logService.log("homework", "UPLOAD", String.valueOf(assignmentId),
+                    "上传作业附件 " + results.size() + " 个: " + a.getTitle());
+        }
+        return results;
+    }
+
+    /** 下载作业发布附件：先校验作业访问权限，再校验 fileId 归属，禁止通过 fileId 绕过权限 */
+    public void downloadAssignmentFile(Long assignmentId, Long fileId, HttpServletResponse response) throws IOException {
+        HomeworkAssignment a = assignmentRepository.findByIdAndDeletedAtIsNull(assignmentId)
+                .orElseThrow(() -> BizException.of("作业不存在"));
+        checkAssignmentViewPermission(a);
+        HomeworkAssignmentFile af = assignmentFileRepository
+                .findByAssignmentIdAndFileIdAndDeletedAtIsNull(assignmentId, fileId)
+                .orElseThrow(() -> BizException.of("附件不存在"));
+        fileStorageService.downloadFile(af.getFileId(), response);
+    }
+
+    /** 删除作业发布附件：fullAccess 或部长（本部门，届次自由） */
+    @Transactional
+    public void deleteAssignmentFile(Long assignmentId, Long fileId) {
+        permissionChecker.requireManageHomework();
+        HomeworkAssignment a = assignmentRepository.findByIdAndDeletedAtIsNull(assignmentId)
+                .orElseThrow(() -> BizException.of("作业不存在"));
+        validateOwnership(a);
+        HomeworkAssignmentFile af = assignmentFileRepository
+                .findByAssignmentIdAndFileIdAndDeletedAtIsNull(assignmentId, fileId)
+                .orElseThrow(() -> BizException.of("附件不存在"));
+        af.setDeletedAt(OffsetDateTime.now());
+        assignmentFileRepository.save(af);
+        fileStorageService.softDeleteFileRecord(af.getFileId());
+        logService.log("homework", "DELETE", String.valueOf(af.getId()),
+                "删除作业附件: " + a.getTitle());
+    }
+
+    private HomeworkAssignmentFileResponse toFileResponse(HomeworkAssignmentFile af) {
+        HomeworkAssignmentFileResponse dto = new HomeworkAssignmentFileResponse();
+        dto.setId(af.getId());
+        dto.setFileId(af.getFileId());
+        dto.setCreatedAt(af.getCreatedAt());
+        FileRecord fr = fileStorageService.getFileRecord(af.getFileId());
+        if (fr != null) {
+            dto.setOriginalName(fr.getOriginalName());
+            dto.setFileSize(fr.getFileSize());
+            dto.setContentType(fr.getContentType());
+        }
+        return dto;
+    }
+
+    private void enrichAttachments(HomeworkAssignmentResponse r, Long assignmentId) {
+        r.setAttachments(assignmentFileRepository.findAllByAssignmentIdAndDeletedAtIsNull(assignmentId)
+                .stream().map(this::toFileResponse).toList());
     }
 
     // ==================== 内部辅助 ====================
@@ -258,6 +447,8 @@ public class HomeworkService {
             pointItemRepository.findById(a.getPointItemId()).ifPresent(pi -> r.setPointItemName(pi.getItemName()));
         }
         r.setCreatedByName(ActorHolder.get().getName());
+        // submissionCount = 所有有效提交（含已批改），批改不减少；
+        // submittedCount = 仅 SUBMITTED 状态（待批改）；gradedCount = GRADED。
         r.setSubmissionCount(submissionRepository.countByHomeworkId(a.getId()));
         r.setSubmittedCount(submissionRepository.countByHomeworkIdAndStatus(a.getId(), "SUBMITTED"));
         r.setGradedCount(submissionRepository.countByHomeworkIdAndStatus(a.getId(), "GRADED"));
