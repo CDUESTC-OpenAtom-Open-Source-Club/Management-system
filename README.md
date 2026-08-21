@@ -26,7 +26,7 @@
 | 工具 | 版本要求 | 说明 |
 |------|---------|------|
 | Java JDK | 17+ | — |
-| Maven | 3.9+ | — |
+| Maven | 3.9+（可选） | 已内置 Maven Wrapper（`mvnw`/`mvnw.cmd`），首次运行自动下载，无需手动安装 |
 | Node.js | 16+ | 用于运行前端开发服务器 |
 | PostgreSQL | 17+ | 本地服务已启用 |
 
@@ -60,10 +60,12 @@
 
 ### 1. 启动后端
 
-在项目根目录执行：
+在项目根目录执行。项目已内置 **Maven Wrapper**，无需安装 Maven，只要本机装了 **JDK 17+** 即可（首次运行会自动下载 Maven）：
+
+**Windows（cmd 或 PowerShell）：**
 
 ```cmd
-mvn spring-boot:run
+mvnw.cmd spring-boot:run
 ```
 
 ### 2. 启动前端
@@ -232,14 +234,16 @@ boolean fullAccess = "会长".equals(position)
 ### 后端测试
 
 ```cmd
-mvn test
+mvnw.cmd test
 ```
 
 ### 打包
 
 ```cmd
-mvn package
+mvnw.cmd package
 ```
+
+> Linux / macOS 下将 `mvnw.cmd` 换成 `./mvnw`。
 
 ### 前端构建
 

@@ -1,4 +1,5 @@
-.mvn/
+.mvn/*
+!.mvn/wrapper/
 target/
 *.class
 *.jar
