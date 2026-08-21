@@ -33,4 +33,13 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     Page<UserAccount> searchUsers(@Param("keyword") String keyword, @Param("cohortId") Long cohortId, Pageable pageable);
 
     long countByProfileCompletedAndDeletedAtIsNull(boolean profileCompleted);
+
+    /**
+     * 待完善资料的成员数：只统计「资料未完善」且「绑定成员未被软删除」的账号，
+     * 避免把绑定了已删除成员的孤儿账号计入。
+     */
+    @Query("SELECT COUNT(u) FROM UserAccount u " +
+           "JOIN com.openatom.club.member.entity.Member m ON m.id = u.memberId AND m.deletedAt IS NULL " +
+           "WHERE u.deletedAt IS NULL AND u.profileCompleted = false")
+    long countIncompleteProfilesOfActiveMembers();
 }

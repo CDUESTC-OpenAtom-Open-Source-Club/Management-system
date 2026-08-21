@@ -15,10 +15,6 @@ export function getMember(id: number): Promise<Member> {
   return request.get(`/api/members/${id}`)
 }
 
-export function createMember(data: MemberForm): Promise<Member> {
-  return request.post('/api/members', data)
-}
-
 export function updateMember(id: number, data: MemberForm): Promise<Member> {
   return request.put(`/api/members/${id}`, data)
 }

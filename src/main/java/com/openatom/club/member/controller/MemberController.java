@@ -31,12 +31,6 @@ public class MemberController {
         return ApiResponse.success(memberService.list(keyword, cohortId, page, size));
     }
 
-    @Operation(summary = "新增成员")
-    @PostMapping
-    public ApiResponse<MemberResponse> create(@Valid @RequestBody MemberRequest req) {
-        return ApiResponse.success(memberService.create(req));
-    }
-
     @Operation(summary = "修改成员")
     @PutMapping("/{id}")
     public ApiResponse<MemberResponse> update(@PathVariable Long id,

@@ -19,6 +19,11 @@ public class DashboardStatsResponse {
     private long totalMeetingMinutes;
     private long totalFinancePeriods;
 
+    /** 待批改作业数（按权限 + 届次计算） */
+    private long pendingHomeworkReviews;
+    /** 本月财务台账是否待建立：1=待更新，0=已建立 */
+    private long currentMonthFinancePending;
+
     private List<DepartmentStat> departmentDistribution;
     private List<WeeklyTrend> weeklyTrend;
     private List<PendingTask> pendingTasks;
@@ -47,6 +52,8 @@ public class DashboardStatsResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class PendingTask {
+        /** 任务类型，供前端映射图标/配色：profile / review / homework / finance */
+        private String type;
         private String title;
         private String desc;
         private long count;
@@ -58,6 +65,10 @@ public class DashboardStatsResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RecentActivity {
+        private String operatorName;
+        private String operatorDepartment;
+        private String moduleName;
+        private String actionType;
         private String title;
         private String desc;
         private String time;

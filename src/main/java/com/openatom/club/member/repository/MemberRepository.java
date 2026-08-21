@@ -10,8 +10,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface MemberRepository extends JpaRepository<Member, Long> {
-    boolean existsByStudentNoAndDeletedAtIsNull(String studentNo);
-
     @Query("SELECT m FROM Member m WHERE m.deletedAt IS NULL AND " +
            "(:cohortId IS NULL OR (:cohortId = -1 AND m.cohortId IS NULL) OR m.cohortId = :cohortId) AND " +
            "(:keyword IS NULL OR m.name LIKE %:keyword% OR m.studentNo LIKE %:keyword% OR " +

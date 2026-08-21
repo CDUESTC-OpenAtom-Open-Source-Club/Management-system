@@ -9,6 +9,7 @@ export interface WeeklyTrend {
 }
 
 export interface PendingTask {
+  type?: string
   title: string
   desc: string
   count: number
@@ -16,6 +17,10 @@ export interface PendingTask {
 }
 
 export interface RecentActivity {
+  operatorName?: string
+  operatorDepartment?: string
+  moduleName?: string
+  actionType?: string
   title: string
   desc: string
   time: string
@@ -27,6 +32,8 @@ export interface DashboardStats {
   pendingApplications: number
   totalMeetingMinutes: number
   totalFinancePeriods: number
+  pendingHomeworkReviews: number
+  currentMonthFinancePending: number
   departmentDistribution: DepartmentStat[]
   weeklyTrend: WeeklyTrend[]
   pendingTasks: PendingTask[]

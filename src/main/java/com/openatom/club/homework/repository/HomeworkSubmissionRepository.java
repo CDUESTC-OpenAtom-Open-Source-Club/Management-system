@@ -35,4 +35,15 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
 
     @Query("SELECT s FROM HomeworkSubmission s WHERE s.deletedAt IS NULL AND s.status = :status")
     Page<HomeworkSubmission> findByStatus(@Param("status") String status, Pageable pageable);
+
+    /**
+     * 待批改作业数（status = SUBMITTED），按届次 + 提交人部门过滤。
+     * department 为 null 表示不限部门（fullAccess）；cohortId 语义与成员一致：null=全部、-1=未分届、正数=指定届次。
+     */
+    @Query("SELECT COUNT(s) FROM HomeworkSubmission s " +
+           "JOIN com.openatom.club.member.entity.Member m ON m.id = s.memberId AND m.deletedAt IS NULL " +
+           "WHERE s.deletedAt IS NULL AND s.status = 'SUBMITTED' " +
+           "AND (:department IS NULL OR m.department = :department) " +
+           "AND (:cohortId IS NULL OR (:cohortId = -1 AND m.cohortId IS NULL) OR m.cohortId = :cohortId)")
+    long countPendingReviews(@Param("department") String department, @Param("cohortId") Long cohortId);
 }

@@ -64,31 +64,6 @@ public class MemberService {
     }
 
     @Transactional
-    public MemberResponse create(MemberRequest req) {
-        permissionChecker.requireManage();
-        if (memberRepository.existsByStudentNoAndDeletedAtIsNull(req.getStudentNo())) {
-            throw BizException.of("学号已存在: " + req.getStudentNo());
-        }
-        Long cohortId = req.getCohortId();
-        if (cohortId == null) {
-            throw BizException.of("新成员必须选择届次");
-        }
-        requireActiveCohort(cohortId);
-        Member member = new Member();
-        member.setName(req.getName());
-        member.setStudentNo(req.getStudentNo());
-        member.setPhone(req.getPhone());
-        member.setMajor(req.getMajor());
-        member.setDepartment(req.getDepartment());
-        member.setPosition(StringUtils.hasText(req.getPosition()) ? req.getPosition() : "社员");
-        member.setCohortId(cohortId);
-        Member saved = memberRepository.save(member);
-        logService.log("member", "CREATE", String.valueOf(saved.getId()),
-                "新增成员: " + saved.getName() + "（" + cohortLabel(cohortId) + "）");
-        return MemberResponse.from(saved, cohortYear(cohortId));
-    }
-
-    @Transactional
     public MemberResponse update(Long id, MemberRequest req) {
         permissionChecker.requireManage();
         Member member = memberRepository.findByIdAndDeletedAtIsNull(id)

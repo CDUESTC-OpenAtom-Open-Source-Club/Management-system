@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   Table, Button, Input, Space, Modal, Form, Select,
-  Popconfirm, message, Tag, Segmented,
+  Popconfirm, message, Tag, Segmented, Empty,
 } from 'antd'
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { SearchOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
+import { useNavigate } from 'react-router-dom'
 import PageContainer from '../components/PageContainer'
 import CohortSelect from '../components/CohortSelect'
-import { getMembers, createMember, updateMember, deleteMember, batchSetCohort, batchDeleteMembers } from '../api/member'
+import { getMembers, updateMember, deleteMember, batchSetCohort, batchDeleteMembers } from '../api/member'
 import { getCohorts } from '../api/cohort'
 import type { Member, MemberForm } from '../types/member'
 import type { Cohort } from '../types/cohort'
@@ -20,6 +21,7 @@ const DEPARTMENT_OPTIONS = ['秘书处', '技术部', '外联部', '宣策部', 
 const UNASSIGNED = 'unassigned'
 
 const Members: React.FC = () => {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<Member[]>([])
   const [total, setTotal] = useState(0)
@@ -81,15 +83,6 @@ const Members: React.FC = () => {
     }
   }, [keyword, cohortId, page, pageSize])
 
-  const handleAdd = () => {
-    setEditingMember(null)
-    form.resetFields()
-    if (activeCohort !== 'all' && activeCohort !== UNASSIGNED) {
-      form.setFieldsValue({ cohortId: Number(activeCohort) })
-    }
-    setModalOpen(true)
-  }
-
   const handleEdit = (record: Member) => {
     setEditingMember(record)
     form.setFieldsValue(record)
@@ -141,16 +134,12 @@ const Members: React.FC = () => {
   }
 
   const handleSubmit = async () => {
+    if (!editingMember) return
     const values = await form.validateFields()
     setSubmitting(true)
     try {
-      if (editingMember) {
-        await updateMember(editingMember.id, values)
-        message.success('修改成功')
-      } else {
-        await createMember(values)
-        message.success('新增成功')
-      }
+      await updateMember(editingMember.id, values)
+      message.success('修改成功')
       setModalOpen(false)
       fetchData()
     } finally {
@@ -198,6 +187,24 @@ const Members: React.FC = () => {
     { label: '未分届', value: UNASSIGNED },
   ]
 
+  const emptyState = (
+    <Empty
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      description={
+        <div>
+          <div>暂无成员</div>
+          <div style={{ color: '#98a2b3', fontSize: 12, marginTop: 4 }}>成员档案将在创建账号时自动生成</div>
+        </div>
+      }
+    >
+      {canManage() && (
+        <Button type="primary" onClick={() => navigate('/users')}>
+          前往账号管理
+        </Button>
+      )}
+    </Empty>
+  )
+
   return (
     <PageContainer
       title="成员管理"
@@ -211,11 +218,6 @@ const Members: React.FC = () => {
           {canManage() && selectedRowKeys.length > 0 && (
             <Button danger onClick={() => setBatchDeleteOpen(true)}>
               批量删除（{selectedRowKeys.length}）
-            </Button>
-          )}
-          {canManage() && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              新增成员
             </Button>
           )}
         </Space>
@@ -255,6 +257,7 @@ const Members: React.FC = () => {
         loading={loading}
         rowSelection={canManage() ? { selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys) } : undefined}
         scroll={{ x: 900 }}
+        locale={{ emptyText: emptyState }}
         pagination={{
           current: page,
           pageSize,
@@ -265,7 +268,7 @@ const Members: React.FC = () => {
       />
 
       <Modal
-        title={editingMember ? '编辑成员' : '新增成员'}
+        title="编辑成员"
         open={modalOpen}
         onOk={handleSubmit}
         onCancel={() => setModalOpen(false)}
@@ -287,11 +290,7 @@ const Members: React.FC = () => {
           <Form.Item label="专业" name="major">
             <Input placeholder="请输入专业" />
           </Form.Item>
-          <Form.Item
-            label="届次"
-            name="cohortId"
-            rules={editingMember ? [] : [{ required: true, message: '请选择届次' }]}
-          >
+          <Form.Item label="届次" name="cohortId">
             <CohortSelect enabledOnly={false} placeholder="请选择届次" />
           </Form.Item>
           <Form.Item label="部门" name="department">

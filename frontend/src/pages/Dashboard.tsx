@@ -1,84 +1,63 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Carousel, Progress, Space, Statistic, Tag, Tooltip, Typography, Spin, Segmented } from 'antd'
+import React, { useEffect, useState } from 'react'
+import { Button, Card, Segmented, Skeleton } from 'antd'
 import {
   TeamOutlined,
   TrophyOutlined,
-  FormOutlined,
   CheckCircleOutlined,
-  TableOutlined,
   FileTextOutlined,
   AccountBookOutlined,
-  AuditOutlined,
-  UserOutlined,
-  ArrowRightOutlined,
-  CalendarOutlined,
-  ThunderboltOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { getCurrentUser } from '../utils/auth'
-import { canManage, canViewFinance, canViewLogs } from '../utils/permission'
+import { canViewLogs } from '../utils/permission'
 import { getDashboardStats } from '../api/dashboard'
 import type { DashboardStats } from '../types/dashboard'
 import { getCohorts } from '../api/cohort'
 import type { Cohort } from '../types/cohort'
-import { cohortLabel } from '../utils/cohort'
-import logo from '../assets/logo.png'
-import banner1 from '../assets/banner-operations.svg'
-import banner2 from '../assets/banner-operations.svg'
-
-const { Title, Paragraph, Text } = Typography
-
-const introSlides = [
-  {
-    key: '1',
-    title: '成员管理与资料完善',
-    desc: '围绕成员信息、账号管理和资料完善构建统一工作台。',
-    action: '查看成员管理',
-    to: '/members',
-    image: banner1,
-  },
-  {
-    key: '2',
-    title: '积分登记与审核',
-    desc: '支持登记、审核、统计与排名，形成清晰的积分闭环。',
-    action: '进入积分审核',
-    to: '/point-applications',
-    image: banner2,
-  },
-]
-
-const toolbox = [
-  { label: '成员管理', to: '/members', icon: <TeamOutlined /> },
-  { label: '账号管理', to: '/users', icon: <UserOutlined />, managerOnly: true },
-  { label: '积分项目管理', to: '/point-items', icon: <TrophyOutlined />, managerOnly: true },
-  { label: '积分审核', to: '/point-applications', icon: <CheckCircleOutlined />, managerOnly: true },
-  { label: '我的资料', to: '/my-profile', icon: <FormOutlined /> },
-  { label: '会议纪要', to: '/meeting-minutes', icon: <FileTextOutlined /> },
-  { label: '财务台账', to: '/finance', icon: <AccountBookOutlined />, managerOnly: true },
-  { label: '操作日志', to: '/operation-logs', icon: <AuditOutlined />, managerOnly: true },
-]
+import DashboardGreeting from './dashboard/DashboardGreeting'
+import TodayTasks from './dashboard/TodayTasks'
+import TrendChart from './dashboard/TrendChart'
+import DepartmentDonut from './dashboard/DepartmentDonut'
+import ActivityList from './dashboard/ActivityList'
+import QuickActions from './dashboard/QuickActions'
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const user = getCurrentUser()
   const fullAccess = user?.fullAccess === true
-  const [hoveredBar, setHoveredBar] = useState<number | null>(null)
+
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
   const [cohorts, setCohorts] = useState<Cohort[]>([])
   const [activeCohort, setActiveCohort] = useState<string>(
-    fullAccess ? 'all' : (user?.cohortId != null ? String(user.cohortId) : 'all')
+    fullAccess ? 'all' : (user?.cohortId != null ? String(user.cohortId) : 'all'),
   )
 
   const cohortId = activeCohort === 'all' ? undefined : Number(activeCohort)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
+    setError(false)
     getDashboardStats(cohortId)
-      .then(setStats)
-      .catch(() => { setStats(null) })
-      .finally(() => setLoading(false))
-  }, [cohortId])
+      .then((s) => {
+        if (!cancelled) setStats(s)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStats(null)
+          setError(true)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [cohortId, reloadTick])
 
   useEffect(() => {
     getCohorts().then((list) => {
@@ -88,186 +67,145 @@ const Dashboard: React.FC = () => {
         if (latest) setActiveCohort(String(latest.id))
       }
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const visibleToolbox = useMemo(() => toolbox.filter((item) => !item.managerOnly || fullAccess), [fullAccess])
-
-  const statsCards = stats ? [
-    { title: '社团成员总数', value: stats.totalMembers, icon: <TeamOutlined />, color: '#2f6bff', trend: '实时统计' },
-    { title: '积分项目数量', value: stats.totalPointItems, icon: <TrophyOutlined />, color: '#f59e0b', trend: '实时统计' },
-    { title: '待审核登记数', value: stats.pendingApplications, icon: <CheckCircleOutlined />, color: stats.pendingApplications > 0 ? '#ef4444' : '#19a974', trend: stats.pendingApplications > 0 ? '需优先处理' : '暂无待审' },
-    { title: '会议纪要数', value: stats.totalMeetingMinutes, icon: <FileTextOutlined />, color: '#8b5cf6', trend: '实时统计' },
-    { title: '财务月份数', value: stats.totalFinancePeriods, icon: <AccountBookOutlined />, color: '#19a974', trend: '实时统计' },
-  ] : []
-
-  const maxBarValue = stats?.weeklyTrend?.length
-    ? Math.max(...stats.weeklyTrend.map((w) => w.count), 1)
-    : 40
+  const kpis = stats
+    ? [
+        { key: 'members', title: '成员总数', value: stats.totalMembers, sub: '当前届次', icon: <TeamOutlined />, color: '#2f6bff', soft: '#eef4ff' },
+        { key: 'pointItems', title: '积分项目', value: stats.totalPointItems, sub: '已配置项目', icon: <TrophyOutlined />, color: '#f79009', soft: '#fff6ed' },
+        ...(fullAccess
+          ? [
+              {
+                key: 'pending',
+                title: '待审核积分',
+                value: stats.pendingApplications,
+                sub: stats.pendingApplications > 0 ? '需优先处理' : '暂无待审',
+                icon: <CheckCircleOutlined />,
+                color: stats.pendingApplications > 0 ? '#f79009' : '#12b76a',
+                soft: stats.pendingApplications > 0 ? '#fff6ed' : '#ecfdf3',
+              },
+            ]
+          : []),
+        { key: 'meetings', title: '会议纪要', value: stats.totalMeetingMinutes, sub: '累计归档', icon: <FileTextOutlined />, color: '#7f56d9', soft: '#f4f3ff' },
+        ...(fullAccess
+          ? [
+              {
+                key: 'finance',
+                title: '财务台账',
+                value: stats.totalFinancePeriods,
+                sub: '已建立月份',
+                icon: <AccountBookOutlined />,
+                color: '#12b76a',
+                soft: '#ecfdf3',
+              },
+            ]
+          : []),
+      ]
+    : []
 
   if (loading) {
     return (
-      <div className="app-page dashboard-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <Spin size="large" />
+      <div className="app-page dashboard-page">
+        <Card className="app-card">
+          <Skeleton active title={{ width: 220 }} paragraph={{ rows: 2 }} />
+          <div className="kpi-grid" style={{ marginTop: 20 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div className="kpi-card" key={i}>
+                <Skeleton active paragraph={false} />
+              </div>
+            ))}
+          </div>
+        </Card>
+        <div className="dash-two-col">
+          <Card className="app-card">
+            <Skeleton active paragraph={{ rows: 6 }} />
+          </Card>
+          <Card className="app-card">
+            <Skeleton active paragraph={{ rows: 6 }} />
+          </Card>
+        </div>
       </div>
     )
   }
+
+  if (error) {
+    return (
+      <div className="app-page dashboard-page">
+        <Card className="app-card">
+          <div className="dash-error">
+            <div className="dash-error-title">工作台数据加载失败</div>
+            <div className="dash-error-sub">请检查网络或后端服务后重试。</div>
+            <Button type="primary" onClick={() => setReloadTick((t) => t + 1)}>
+              重新加载
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!stats) return null
 
   return (
     <div className="app-page dashboard-page">
       {fullAccess && (
         <Segmented
+          className="dash-cohort"
           value={activeCohort}
           options={[
             { label: '全部', value: 'all' },
             ...cohorts.map((c) => ({ label: `${c.year}届`, value: String(c.id) })),
           ]}
           onChange={(v) => setActiveCohort(v as string)}
-          style={{ marginBottom: 16 }}
         />
       )}
-      <section className="dashboard-hero">
-        <Card className="app-card" bordered={false}>
-          <div className="dashboard-hero-left">
-            <div>
-              <div className="dashboard-hello">你好，{user?.name || user?.username || '同学'}</div>
-              <Title level={2} style={{ margin: '8px 0 8px' }}>欢迎进入开放原子开源社团秘书处管理系统</Title>
-              <Paragraph style={{ marginBottom: 0, color: '#667085', maxWidth: 680 }}>
-                用于成员管理、资料完善、积分登记、会议归档与日常办公，保持流程清晰、记录完整、操作可追溯。
-              </Paragraph>
-              <div className="dashboard-hero-tags">
-                <Tag color="blue">部门：{user?.department || '未填写'}</Tag>
-                <Tag color="green">职务：{user?.position || '成员'}</Tag>
-                <Tag color="cyan">届次：{cohortLabel(user?.cohortYear)}</Tag>
-                <Tag color="default">权限：{fullAccess ? 'fullAccess' : 'normal'}</Tag>
+
+      <Card className="app-card dash-hero">
+        <DashboardGreeting user={user} />
+        <TodayTasks tasks={stats.pendingTasks} onNavigate={navigate} />
+      </Card>
+
+      <section className="kpi-grid">
+        {kpis.map((k) => (
+          <Card key={k.key} className="app-card kpi-card">
+            <div className="kpi-inner">
+              <span className="kpi-icon" style={{ background: k.soft, color: k.color }}>
+                {k.icon}
+              </span>
+              <div className="kpi-meta">
+                <div className="kpi-title">{k.title}</div>
+                <div className="kpi-value">{k.value}</div>
+                <div className="kpi-sub">{k.sub}</div>
               </div>
             </div>
-            <div className="dashboard-hero-actions">
-              <Button type="primary" onClick={() => navigate('/members')}>成员管理</Button>
-              <Button onClick={() => navigate('/my-profile')}>我的资料</Button>
-              <Button onClick={() => navigate('/points-table')}>积分总表</Button>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        ))}
+      </section>
 
-        <Card className="dashboard-carousel-card app-card" bordered={false}>
-          <div className="dashboard-carousel-wrap">
-            <Carousel autoplay autoplaySpeed={3600} effect="fade" dots>
-              {introSlides.map((item) => (
-                <div key={item.key}>
-                  <div className="carousel-slide" style={{ backgroundImage: `url(${item.image})` }}>
-                    <div>
-                      <h3 className="carousel-title">{item.title}</h3>
-                      <p className="carousel-desc">{item.desc}</p>
-                    </div>
-                    <Button onClick={() => navigate(item.to)}>{item.action} <ArrowRightOutlined /></Button>
-                  </div>
-                </div>
-              ))}
-            </Carousel>
-          </div>
+      <section className="dash-two-col dash-charts">
+        <Card
+          className="app-card"
+          title="积分登记趋势"
+          extra={<span className="section-sub">近 7 周</span>}
+        >
+          <TrendChart data={stats.weeklyTrend} />
+        </Card>
+        <Card className="app-card donut-card" title="部门成员构成">
+          <DepartmentDonut data={stats.departmentDistribution} />
         </Card>
       </section>
 
-      {stats && (
-        <>
-          <section className="dashboard-stats-grid">
-            {statsCards.map((item, index) => (
-              <Card key={item.title} className="stat-card app-card enter-up" bordered={false} style={{ animationDelay: `${index * 70}ms` }}>
-                <Statistic title={item.title} value={item.value} prefix={<span style={{ color: item.color }}>{item.icon}</span>} suffix={<span style={{ fontSize: 12, color: '#667085' }}>{item.trend}</span>} />
-              </Card>
-            ))}
-          </section>
-
-          <section className="dashboard-two-col">
-            <Card className="app-card enter-up" bordered={false} style={{ animationDelay: '80ms' }} title="近期积分登记趋势">
-              <Text type="secondary">近 7 周登记数量变化，用于观察工作节奏。</Text>
-              <div className="bar-chart" style={{ marginTop: 16 }}>
-                {stats.weeklyTrend.map((item, index) => (
-                  <Tooltip key={index} title={`第 ${item.week} 周：${item.count} 条`}>
-                    <div className="bar-chart-item" onMouseEnter={() => setHoveredBar(index)} onMouseLeave={() => setHoveredBar(null)}>
-                      <div className="bar-chart-bar-wrap">
-                        <div className={`bar-chart-bar ${hoveredBar === index ? 'active' : ''}`} style={{ height: `${Math.max(4, (item.count / maxBarValue) * 100)}px` }} />
-                      </div>
-                      <span>W{item.week}</span>
-                    </div>
-                  </Tooltip>
-                ))}
-              </div>
-            </Card>
-
-            <Card className="app-card enter-up" bordered={false} style={{ animationDelay: '120ms' }} title="部门成员分布">
-              <Text type="secondary">按部门统计人数，便于识别人员分布情况。</Text>
-              <div className="dept-list" style={{ marginTop: 16 }}>
-                {stats.departmentDistribution.map((item) => {
-                  const maxDept = Math.max(...stats.departmentDistribution.map((d) => d.value), 1)
-                  return (
-                    <div className="dept-row" key={item.label}>
-                      <div className="dept-head">
-                        <span>{item.label}</span>
-                        <strong>{item.value}</strong>
-                      </div>
-                      <div className="dept-bar"><div style={{ width: `${(item.value / maxDept) * 100}%` }} /></div>
-                    </div>
-                  )
-                })}
-              </div>
-            </Card>
-          </section>
-
-          <section className="dashboard-two-col">
-            <Card className="app-card enter-up" bordered={false} style={{ animationDelay: '100ms' }} title="待办事项">
-              <div className="todo-list">
-                {stats.pendingTasks.length > 0 ? stats.pendingTasks.map((item) => (
-                  <div className="todo-item" key={item.title} onClick={() => navigate(item.to)} role="button" tabIndex={0}>
-                    <div>
-                      <div className="todo-title">{item.title}</div>
-                      <div className="todo-desc">{item.desc}</div>
-                    </div>
-                    <Space>
-                      <Tag color={item.count > 0 ? 'blue' : 'default'}>{item.count}</Tag>
-                      <ArrowRightOutlined className="todo-arrow" />
-                    </Space>
-                  </div>
-                )) : (
-                  <Text type="secondary" style={{ padding: 16 }}>暂无待办事项</Text>
-                )}
-              </div>
-            </Card>
-
-            <Card className="app-card enter-up" bordered={false} style={{ animationDelay: '140ms' }} title="最新动态">
-              <div className="timeline-list">
-                {stats.recentActivities.length > 0 ? stats.recentActivities.map((item, index) => (
-                  <div className="timeline-item" key={`${item.title}-${index}`}>
-                    <div className="timeline-dot">{index + 1}</div>
-                    <div className="timeline-content">
-                      <div className="timeline-title">{item.title}</div>
-                      <div className="timeline-desc">{item.desc}</div>
-                    </div>
-                    <div className="timeline-time">{item.time}</div>
-                  </div>
-                )) : (
-                  <Text type="secondary" style={{ padding: 16 }}>暂无操作记录</Text>
-                )}
-              </div>
-            </Card>
-          </section>
-        </>
-      )}
-
-      <section>
-        <Card className="app-card enter-up" bordered={false} style={{ animationDelay: '180ms' }} title="常用功能工具箱">
-          <div className="tool-grid">
-            {visibleToolbox.map((item) => (
-              <div key={item.label} className="tool-card" onClick={() => navigate(item.to)} role="button" tabIndex={0}>
-                <div className="tool-icon">{item.icon}</div>
-                <div className="tool-meta">
-                  <div className="tool-title">{item.label}</div>
-                  <div className="tool-sub">进入页面</div>
-                </div>
-                <ArrowRightOutlined className="tool-arrow" />
-              </div>
-            ))}
-          </div>
+      <section className="dash-two-col dash-bottom">
+        <Card className="app-card">
+          <ActivityList
+            activities={stats.recentActivities}
+            canViewLogs={canViewLogs()}
+            onViewAll={() => navigate('/operation-logs')}
+          />
+        </Card>
+        <Card className="app-card">
+          <QuickActions onNavigate={navigate} />
         </Card>
       </section>
     </div>

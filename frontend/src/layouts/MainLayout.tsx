@@ -1,31 +1,19 @@
-import React, { useMemo, useState } from 'react'
-import { Avatar, Button, Layout, Menu, Space, Tag, theme, Typography, Dropdown, Modal, Form, Input, message } from 'antd'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Avatar, Button, Layout, Menu, Space, Typography, Dropdown, Modal, Form, Input, message } from 'antd'
 import type { MenuProps } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
-  HomeOutlined,
-  TeamOutlined,
-  TrophyOutlined,
-  FormOutlined,
-  CheckCircleOutlined,
-  TableOutlined,
-  FileTextOutlined,
-  AccountBookOutlined,
-  AuditOutlined,
-  IdcardOutlined,
   UserOutlined,
   DownOutlined,
   KeyOutlined,
-  BookOutlined,
-  EditOutlined,
-  FileSearchOutlined,
-  CalendarOutlined,
-  CloudOutlined,
+  IdcardOutlined,
+  SearchOutlined,
 } from '@ant-design/icons'
 import { changePassword } from '../api/auth'
-import { canManage, canViewFinance, canViewLogs, isFullAccess, canManageHomework } from '../utils/permission'
 import { getCurrentUser, clearAuth } from '../utils/auth'
 import logo from '../assets/logo.png'
+import { NAV_GROUPS, visibleNavItems, NavItem } from '../config/navigation'
+import CommandPalette from '../components/CommandPalette'
 
 const { Header, Sider, Content } = Layout
 const { Text } = Typography
@@ -36,30 +24,44 @@ const MainLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const [passwordForm] = Form.useForm<{ oldPassword: string; newPassword: string; confirmPassword: string }>()
-  const { token: { colorBgContainer } } = theme.useToken()
   const currentUser = getCurrentUser()
 
-  const items = useMemo(() => ([
-    { key: '/', icon: <HomeOutlined />, label: '首页概览' },
-    { key: '/members', icon: <TeamOutlined />, label: '成员管理' },
-    { key: '/point-items', icon: <TrophyOutlined />, label: '积分项目管理', show: canManage() },
-    { key: '/my-applications', icon: <FormOutlined />, label: '我的活动登记' },
-    { key: '/point-applications', icon: <CheckCircleOutlined />, label: '积分审核', show: canManage() },
-    { key: '/points-table', icon: <TableOutlined />, label: '积分总表' },
-    { key: '/my-homework', icon: <BookOutlined />, label: '我的作业' },
-    { key: '/homework-review', icon: <EditOutlined />, label: '作业批改', show: canManageHomework() },
-    { key: '/homework-management', icon: <FileSearchOutlined />, label: '作业管理', show: canManageHomework() },
-    { key: 'alist', icon: <CloudOutlined />, label: '开源网盘' },
-    { key: '/meeting-minutes', icon: <FileTextOutlined />, label: '会议纪要' },
-    { key: '/finance', icon: <AccountBookOutlined />, label: '财务台账', show: canViewFinance() },
-    { key: '/operation-logs', icon: <AuditOutlined />, label: '操作日志', show: canViewLogs() },
-    { key: '/my-profile', icon: <IdcardOutlined />, label: '我的资料' },
-    { key: '/users', icon: <UserOutlined />, label: '账号管理', show: isFullAccess() },
-    { key: '/cohorts', icon: <CalendarOutlined />, label: '届次管理', show: isFullAccess() },
-  ].filter((item) => item.show === undefined || item.show)), [])
+  const menuItems: MenuProps['items'] = useMemo(
+    () =>
+      NAV_GROUPS.map((group) => {
+        const children = group.items
+          .filter((item) => !item.show || item.show())
+          .map((item) => ({ key: item.key, icon: item.icon, label: item.label }))
+        return {
+          type: 'group' as const,
+          key: `group-${group.key}`,
+          label: group.label,
+          children,
+        }
+      }).filter((group) => group.children.length > 0),
+    [],
+  )
 
-  const selectedKey = items.find((i) => i.key !== '/' && location.pathname.startsWith(i.key))?.key ?? location.pathname
+  const flatItems = useMemo(() => visibleNavItems(), [])
+  const selectedKey = useMemo(
+    () => flatItems.find((i) => i.key !== '/' && location.pathname.startsWith(i.key))?.key ?? location.pathname,
+    [flatItems, location.pathname],
+  )
+
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '')
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        setPaletteOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const handleChangePassword = async (values: { oldPassword: string; newPassword: string; confirmPassword: string }) => {
     if (values.newPassword !== values.confirmPassword) {
@@ -99,6 +101,15 @@ const MainLayout: React.FC = () => {
     }
   }
 
+  const handlePaletteNavigate = (item: NavItem) => {
+    setPaletteOpen(false)
+    if (item.key === 'alist') {
+      handleOpenAList()
+    } else {
+      navigate(item.key)
+    }
+  }
+
   const userMenu: MenuProps['items'] = [
     { key: 'profile', label: '我的资料', icon: <IdcardOutlined />, onClick: () => navigate('/my-profile') },
     { key: 'password', label: '修改密码', icon: <KeyOutlined />, onClick: () => { passwordForm.resetFields(); setPasswordModalOpen(true) } },
@@ -108,7 +119,7 @@ const MainLayout: React.FC = () => {
 
   return (
     <Layout className="app-shell" style={{ minHeight: '100vh' }}>
-      <Sider className="app-sider" collapsible collapsed={collapsed} onCollapse={setCollapsed} width={220}>
+      <Sider className="app-sider" collapsible collapsed={collapsed} onCollapse={setCollapsed} width={224} breakpoint="lg">
         <div className="app-brand">
           <div className="app-brand-logo-wrap">
             <img className="app-brand-logo" src={logo} alt="开放原子开源社团" />
@@ -124,7 +135,7 @@ const MainLayout: React.FC = () => {
           theme="dark"
           mode="inline"
           selectedKeys={[selectedKey]}
-          items={items}
+          items={menuItems}
           onClick={({ key }) => {
             if (key === 'alist') {
               handleOpenAList()
@@ -139,29 +150,34 @@ const MainLayout: React.FC = () => {
         <Header className="app-header">
           <div className="app-header-title">
             <div className="app-header-title-main">工作台</div>
-            <div className="app-header-title-sub">成员管理、积分登记、作业管理与日常办公</div>
           </div>
 
-          <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight">
-            <div className="app-header-user">
-              <Avatar size={32} icon={<UserOutlined />} />
-              <div className="app-header-user-meta">
-                <Text className="app-header-username">{currentUser?.name || currentUser?.username || '用户'}</Text>
-                <Space size={6} wrap>
-                  {currentUser?.position && <Tag className="app-header-tag">{currentUser.position}</Tag>}
-                  <DownOutlined className="app-header-arrow" />
-                </Space>
+          <div className="app-header-right">
+            <button type="button" className="app-header-search" onClick={() => setPaletteOpen(true)} aria-label="搜索功能或页面">
+              <SearchOutlined />
+              <span className="app-header-search-text">搜索功能或页面…</span>
+              <span className="app-header-search-hint">{isMac ? '⌘ K' : 'Ctrl K'}</span>
+            </button>
+
+            <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight">
+              <div className="app-header-user" role="button" tabIndex={0} aria-label="用户菜单">
+                <Avatar size={32} icon={<UserOutlined />} style={{ background: '#2f6bff' }} />
+                <div className="app-header-user-meta">
+                  <Text className="app-header-username">{currentUser?.name || currentUser?.username || '用户'}</Text>
+                  <span className="app-header-position">{currentUser?.position || '成员'}</span>
+                </div>
+                <DownOutlined className="app-header-arrow" />
               </div>
-            </div>
-          </Dropdown>
+            </Dropdown>
+          </div>
         </Header>
 
         <Content className="app-content">
-          <div style={{ background: colorBgContainer, borderRadius: 12, padding: 0 }}>
-            <Outlet />
-          </div>
+          <Outlet />
         </Content>
       </Layout>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handlePaletteNavigate} />
 
       <Modal
         title="修改密码"

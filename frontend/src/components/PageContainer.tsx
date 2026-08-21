@@ -11,19 +11,12 @@ interface Props {
 
 const PageContainer: React.FC<Props> = ({ title, extra, children }) => {
   return (
-    <div style={{ padding: '0 4px' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 16,
-        }}
-      >
-        <Title level={4} style={{ margin: 0 }}>
+    <div className="app-page">
+      <div className="page-container-head">
+        <Title level={4} className="page-container-title">
           {title}
         </Title>
-        {extra && <div>{extra}</div>}
+        {extra && <div className="page-container-extra">{extra}</div>}
       </div>
       {children}
     </div>
