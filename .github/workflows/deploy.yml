@@ -83,13 +83,21 @@ jobs:
             -o ServerAliveInterval=10
             -o ServerAliveCountMax=3
           )
+          SCP_OPTS=(
+            -i ~/.ssh/deploy_key
+            -P "${{ secrets.SERVER_PORT }}"
+            -o BatchMode=yes
+            -o ConnectTimeout=20
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=3
+          )
           SERVER="${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}"
           APP_DIR="/opt/management-system"
 
           tar -C frontend/dist -czf frontend-dist.tgz .
           ssh "${SSH_OPTS[@]}" "$SERVER" "mkdir -p '$APP_DIR/frontend' '$APP_DIR/backend'"
-          ssh "${SSH_OPTS[@]}" "$SERVER" "cat > /tmp/management-system-frontend.tgz" < frontend-dist.tgz
-          ssh "${SSH_OPTS[@]}" "$SERVER" "cat > /tmp/management-system-club-secretary.jar" < target/club-secretary-1.0.0-SNAPSHOT.jar
+          scp "${SCP_OPTS[@]}" frontend-dist.tgz "$SERVER:/tmp/management-system-frontend.tgz"
+          scp "${SCP_OPTS[@]}" target/club-secretary-1.0.0-SNAPSHOT.jar "$SERVER:/tmp/management-system-club-secretary.jar"
           ssh "${SSH_OPTS[@]}" "$SERVER" "set -e; find '$APP_DIR/frontend' -mindepth 1 -maxdepth 1 -exec rm -rf {} +; tar -xzf /tmp/management-system-frontend.tgz -C '$APP_DIR/frontend'; mv /tmp/management-system-club-secretary.jar '$APP_DIR/backend/club-secretary.jar'; rm -f /tmp/management-system-frontend.tgz; systemctl restart management-system; nginx -t; systemctl reload nginx"
 
       - name: Verify deployment
