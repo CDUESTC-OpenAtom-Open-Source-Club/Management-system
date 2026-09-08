@@ -88,7 +88,7 @@ jobs:
 
           ssh "${SSH_OPTS[@]}" "$SERVER" "mkdir -p '$APP_DIR/frontend' '$APP_DIR/backend'"
           rsync -az --delete -e "ssh ${SSH_OPTS[*]}" frontend/dist/ "$SERVER:$APP_DIR/frontend/"
-          scp "${SSH_OPTS[@]}" target/club-secretary-1.0.0-SNAPSHOT.jar "$SERVER:$APP_DIR/backend/club-secretary.jar.tmp"
+          rsync -az -e "ssh ${SSH_OPTS[*]}" target/club-secretary-1.0.0-SNAPSHOT.jar "$SERVER:$APP_DIR/backend/club-secretary.jar.tmp"
           ssh "${SSH_OPTS[@]}" "$SERVER" "mv '$APP_DIR/backend/club-secretary.jar.tmp' '$APP_DIR/backend/club-secretary.jar' && systemctl restart management-system && nginx -t && systemctl reload nginx"
 
       - name: Verify deployment
@@ -103,3 +103,4 @@ jobs:
             sleep 5
           done
           exit 1
+
