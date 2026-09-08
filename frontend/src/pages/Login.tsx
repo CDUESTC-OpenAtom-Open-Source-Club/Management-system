@@ -66,6 +66,9 @@ const Login: React.FC = () => {
               className="login-input"
               prefix={<UserOutlined />}
               placeholder="用户名"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
           </Form.Item>
 
@@ -77,6 +80,9 @@ const Login: React.FC = () => {
               className="login-input"
               prefix={<LockOutlined />}
               placeholder="密码"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
           </Form.Item>
 
