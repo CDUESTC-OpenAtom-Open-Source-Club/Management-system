@@ -5,7 +5,13 @@ import { getToken } from './auth'
  * 获取完整 API 地址
  */
 function fullUrl(path: string): string {
-  const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+  if (/^https?:\/\//i.test(path)) {
+    return path
+  }
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+  if (!base || path === base || path.startsWith(`${base}/`)) {
+    return path
+  }
   return base + path
 }
 
@@ -14,13 +20,13 @@ function fullUrl(path: string): string {
  */
 async function fetchBlob(url: string): Promise<{ blob: Blob; filename: string } | null> {
   const token = getToken()
-  const resp = await fetch(url, {
+  const resp = await fetch(fullUrl(url), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!resp.ok) {
     if (resp.status === 401) {
       message.error('登录已过期，请重新登录')
-      setTimeout(() => { window.location.href = '/login' }, 1000)
+      setTimeout(() => { window.location.href = `${import.meta.env.BASE_URL}login` }, 1000)
       return null
     }
     message.error('文件请求失败')

@@ -3,7 +3,7 @@ import { message } from 'antd'
 import { getToken, clearAuth } from '../utils/auth'
 
 const request = axios.create({
-  baseURL: '',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '',
   timeout: 15000,
 })
 
@@ -35,7 +35,7 @@ request.interceptors.response.use(
         message.error('登录已过期，请重新登录')
         // 延迟跳转，让 message 显示完毕
         setTimeout(() => {
-          window.location.href = '/login'
+          window.location.href = `${import.meta.env.BASE_URL}login`
         }, 1000)
       } else if (status === 403) {
         message.error('权限不足，无法执行该操作')

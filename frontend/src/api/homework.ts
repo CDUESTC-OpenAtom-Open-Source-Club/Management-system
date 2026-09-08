@@ -3,6 +3,8 @@ import { getToken } from '../utils/auth'
 import type { PageResult } from '../types/common'
 import type { HomeworkAssignment, HomeworkSubmission, GradeRequest, AssignmentFileInfo } from '../types/homework'
 
+const apiUrl = (path: string) => `${import.meta.env.VITE_API_BASE_URL || ''}${path}`
+
 // ---- 作业管理 ----
 
 /** 管理员获取作业列表 */
@@ -81,7 +83,7 @@ export async function uploadAssignmentFiles(assignmentId: number, files: File[])
   const token = getToken()
   const formData = new FormData()
   files.forEach((f) => formData.append('files', f))
-  const resp = await fetch(`/api/homeworks/${assignmentId}/files`, {
+  const resp = await fetch(apiUrl(`/api/homeworks/${assignmentId}/files`), {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
@@ -118,7 +120,7 @@ export async function submitHomework(homeworkId: number, content: string, files:
   const formData = new FormData()
   if (content) formData.append('content', content)
   files.forEach((f) => formData.append('files', f))
-  const resp = await fetch(`/api/homeworks/${homeworkId}/submit`, {
+  const resp = await fetch(apiUrl(`/api/homeworks/${homeworkId}/submit`), {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
