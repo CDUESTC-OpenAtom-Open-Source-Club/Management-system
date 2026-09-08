@@ -1,0 +1,142 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    concurrency:
+      group: management-system-production-deploy
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: /management-system-api
+        run: |
+          npm ci
+          npm run build -- --base=/management-system/
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: Build backend
+        run: |
+          chmod +x ./mvnw
+          ./mvnw -B clean package -DskipTests
+
+      - name: Prepare SSH
+        timeout-minutes: 2
+        run: |
+          retry() {
+            for attempt in 1 2 3 4 5; do
+              "$@" && return 0
+              echo "command failed, retry ${attempt}/5"
+              sleep $((attempt * 5))
+            done
+            return 1
+          }
+
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.SERVER_PORT }}" "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+          retry ssh -i ~/.ssh/deploy_key \
+            -p "${{ secrets.SERVER_PORT }}" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "echo ssh connected"
+
+      - name: Build and deploy on server
+        timeout-minutes: 20
+        run: |
+          retry() {
+            for attempt in 1 2 3 4 5; do
+              "$@" && return 0
+              echo "command failed, retry ${attempt}/5"
+              sleep $((attempt * 5))
+            done
+            return 1
+          }
+
+          retry ssh -i ~/.ssh/deploy_key \
+            -p "${{ secrets.SERVER_PORT }}" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          REPO_URL="https://github.com/CDUESTC-OpenAtom-Open-Source-Club/Management-system.git"
+          BRANCH="main"
+          SRC_DIR="/opt/management-system-source"
+          APP_DIR="/opt/management-system"
+
+          if [ ! -d "$SRC_DIR/.git" ]; then
+            rm -rf "$SRC_DIR"
+            git clone --branch "$BRANCH" "$REPO_URL" "$SRC_DIR"
+          else
+            git -C "$SRC_DIR" fetch origin "$BRANCH"
+            git -C "$SRC_DIR" reset --hard "origin/$BRANCH"
+            git -C "$SRC_DIR" clean -fd
+          fi
+
+          cd "$SRC_DIR/frontend"
+          npm ci
+          VITE_API_BASE_URL=/management-system-api npm run build -- --base=/management-system/
+          mkdir -p "$APP_DIR/frontend"
+          rsync -a --delete dist/ "$APP_DIR/frontend/"
+
+          cd "$SRC_DIR"
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+          export PATH="$JAVA_HOME/bin:$PATH"
+          chmod +x ./mvnw
+          ./mvnw -B clean package -DskipTests
+          mkdir -p "$APP_DIR/backend"
+          cp target/club-secretary-1.0.0-SNAPSHOT.jar "$APP_DIR/backend/club-secretary.jar.tmp"
+          mv "$APP_DIR/backend/club-secretary.jar.tmp" "$APP_DIR/backend/club-secretary.jar"
+
+          systemctl restart management-system
+          nginx -t
+          systemctl reload nginx
+          REMOTE
+
+      - name: Verify deployment
+        timeout-minutes: 2
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl --fail "https://kcos.club/management-system/" \
+              && curl --fail "https://kcos.club/management-system-api/v3/api-docs"; then
+              exit 0
+            fi
+            echo "health check failed, retry ${attempt}/12"
+            sleep 5
+          done
+          exit 1
