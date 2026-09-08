@@ -1,4 +1,4 @@
-# Last deployment workflow refresh: 2026-09-09 00:51:00 +08:00
+# Last deployment workflow refresh: 2026-09-09 01:15:35 +08:00
 name: Deploy Production
 
 on:
@@ -50,6 +50,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_BASE_URL: /management-system-api
+          VITE_ALIST_URL: http://175.24.139.148:5244/%E5%BC%80%E6%94%BE%E5%8E%9F%E5%AD%90/%E5%BC%80%E6%BA%90%E7%A4%BE%E5%9B%A2%E8%AF%81%E4%B9%A6%E4%B8%8E%E6%97%A5%E5%B8%B8%E5%B1%95%E7%A4%BA
         run: |
           npm ci
           npm run build -- --base=/management-system/
