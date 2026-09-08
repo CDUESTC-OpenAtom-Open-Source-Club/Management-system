@@ -72,61 +72,24 @@ jobs:
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
             "echo ssh connected"
 
-      - name: Build and deploy on server
-        timeout-minutes: 20
+      - name: Deploy artifacts to server
+        timeout-minutes: 10
         run: |
-          retry() {
-            for attempt in 1 2 3 4 5; do
-              "$@" && return 0
-              echo "command failed, retry ${attempt}/5"
-              sleep $((attempt * 5))
-            done
-            return 1
-          }
-
-          retry ssh -i ~/.ssh/deploy_key \
-            -p "${{ secrets.SERVER_PORT }}" \
-            -o BatchMode=yes \
-            -o ConnectTimeout=20 \
-            -o ServerAliveInterval=10 \
-            -o ServerAliveCountMax=3 \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-            "bash -s" <<'REMOTE'
-          set -euo pipefail
-
-          REPO_URL="https://github.com/CDUESTC-OpenAtom-Open-Source-Club/Management-system.git"
-          BRANCH="main"
-          SRC_DIR="/opt/management-system-source"
+          SSH_OPTS=(
+            -i ~/.ssh/deploy_key
+            -p "${{ secrets.SERVER_PORT }}"
+            -o BatchMode=yes
+            -o ConnectTimeout=20
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=3
+          )
+          SERVER="${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}"
           APP_DIR="/opt/management-system"
 
-          if [ ! -d "$SRC_DIR/.git" ]; then
-            rm -rf "$SRC_DIR"
-            git clone --branch "$BRANCH" "$REPO_URL" "$SRC_DIR"
-          else
-            git -C "$SRC_DIR" fetch origin "$BRANCH"
-            git -C "$SRC_DIR" reset --hard "origin/$BRANCH"
-            git -C "$SRC_DIR" clean -fd
-          fi
-
-          cd "$SRC_DIR/frontend"
-          npm ci
-          VITE_API_BASE_URL=/management-system-api npm run build -- --base=/management-system/
-          mkdir -p "$APP_DIR/frontend"
-          rsync -a --delete dist/ "$APP_DIR/frontend/"
-
-          cd "$SRC_DIR"
-          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
-          export PATH="$JAVA_HOME/bin:$PATH"
-          chmod +x ./mvnw
-          ./mvnw -B clean package -DskipTests
-          mkdir -p "$APP_DIR/backend"
-          cp target/club-secretary-1.0.0-SNAPSHOT.jar "$APP_DIR/backend/club-secretary.jar.tmp"
-          mv "$APP_DIR/backend/club-secretary.jar.tmp" "$APP_DIR/backend/club-secretary.jar"
-
-          systemctl restart management-system
-          nginx -t
-          systemctl reload nginx
-          REMOTE
+          ssh "${SSH_OPTS[@]}" "$SERVER" "mkdir -p '$APP_DIR/frontend' '$APP_DIR/backend'"
+          rsync -az --delete -e "ssh ${SSH_OPTS[*]}" frontend/dist/ "$SERVER:$APP_DIR/frontend/"
+          scp "${SSH_OPTS[@]}" target/club-secretary-1.0.0-SNAPSHOT.jar "$SERVER:$APP_DIR/backend/club-secretary.jar.tmp"
+          ssh "${SSH_OPTS[@]}" "$SERVER" "mv '$APP_DIR/backend/club-secretary.jar.tmp' '$APP_DIR/backend/club-secretary.jar' && systemctl restart management-system && nginx -t && systemctl reload nginx"
 
       - name: Verify deployment
         timeout-minutes: 2
@@ -140,4 +103,3 @@ jobs:
             sleep 5
           done
           exit 1
-
