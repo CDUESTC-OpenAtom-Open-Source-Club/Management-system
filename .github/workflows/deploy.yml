@@ -10,7 +10,7 @@ jobs:
   deploy:
     name: Build and deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     concurrency:
       group: management-system-production-deploy
@@ -19,6 +19,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect backend changes
+        id: changes
+        shell: bash
+        run: |
+          backend_changed=false
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            backend_changed=true
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            if git diff --name-only HEAD^ HEAD | grep -E '^(src/|pom\.xml|mvnw|mvnw\.cmd|\.mvn/)'; then
+              backend_changed=true
+            fi
+          else
+            backend_changed=true
+          fi
+          echo "backend_changed=$backend_changed" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,6 +54,7 @@ jobs:
           npm run build -- --base=/management-system/
 
       - name: Setup Java
+        if: steps.changes.outputs.backend_changed == 'true'
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -43,6 +62,7 @@ jobs:
           cache: maven
 
       - name: Build backend
+        if: steps.changes.outputs.backend_changed == 'true'
         run: |
           chmod +x ./mvnw
           ./mvnw -B clean package -DskipTests
@@ -72,7 +92,7 @@ jobs:
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
             "echo ssh connected"
 
-      - name: Deploy artifacts to server
+      - name: Deploy frontend to server
         timeout-minutes: 10
         run: |
           SSH_OPTS=(
@@ -95,10 +115,36 @@ jobs:
           APP_DIR="/opt/management-system"
 
           tar -C frontend/dist -czf frontend-dist.tgz .
-          ssh "${SSH_OPTS[@]}" "$SERVER" "mkdir -p '$APP_DIR/frontend' '$APP_DIR/backend'"
+          ssh "${SSH_OPTS[@]}" "$SERVER" "mkdir -p '$APP_DIR/frontend'"
           scp "${SCP_OPTS[@]}" frontend-dist.tgz "$SERVER:/tmp/management-system-frontend.tgz"
+          ssh "${SSH_OPTS[@]}" "$SERVER" "set -e; find '$APP_DIR/frontend' -mindepth 1 -maxdepth 1 -exec rm -rf {} +; tar -xzf /tmp/management-system-frontend.tgz -C '$APP_DIR/frontend'; rm -f /tmp/management-system-frontend.tgz; nginx -t; systemctl reload nginx"
+
+      - name: Deploy backend to server
+        if: steps.changes.outputs.backend_changed == 'true'
+        timeout-minutes: 45
+        run: |
+          SSH_OPTS=(
+            -i ~/.ssh/deploy_key
+            -p "${{ secrets.SERVER_PORT }}"
+            -o BatchMode=yes
+            -o ConnectTimeout=20
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=3
+          )
+          SCP_OPTS=(
+            -i ~/.ssh/deploy_key
+            -P "${{ secrets.SERVER_PORT }}"
+            -o BatchMode=yes
+            -o ConnectTimeout=20
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=3
+          )
+          SERVER="${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}"
+          APP_DIR="/opt/management-system"
+
+          ssh "${SSH_OPTS[@]}" "$SERVER" "mkdir -p '$APP_DIR/backend'"
           scp "${SCP_OPTS[@]}" target/club-secretary-1.0.0-SNAPSHOT.jar "$SERVER:/tmp/management-system-club-secretary.jar"
-          ssh "${SSH_OPTS[@]}" "$SERVER" "set -e; find '$APP_DIR/frontend' -mindepth 1 -maxdepth 1 -exec rm -rf {} +; tar -xzf /tmp/management-system-frontend.tgz -C '$APP_DIR/frontend'; mv /tmp/management-system-club-secretary.jar '$APP_DIR/backend/club-secretary.jar'; rm -f /tmp/management-system-frontend.tgz; systemctl restart management-system; nginx -t; systemctl reload nginx"
+          ssh "${SSH_OPTS[@]}" "$SERVER" "set -e; mv /tmp/management-system-club-secretary.jar '$APP_DIR/backend/club-secretary.jar'; systemctl restart management-system"
 
       - name: Verify deployment
         timeout-minutes: 2
