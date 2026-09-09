@@ -1,4 +1,4 @@
-# Last deployment workflow refresh: 2026-09-09 20:04:39 +08:00
+# Last deployment workflow refresh: 2026-09-09 20:40:50 +08:00
 name: Deploy Production
 
 on:
@@ -49,7 +49,7 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         env:
-          VITE_ALIST_URL: http://175.24.139.148:5244/%E5%BC%80%E6%94%BE%E5%8E%9F%E5%AD%90/%E5%BC%80%E6%BA%90%E7%A4%BE%E5%9B%A2%E8%AF%81%E4%B9%A6%E4%B8%8E%E6%97%A5%E5%B8%B8%E5%B1%95%E7%A4%BA
+          VITE_ALIST_URL: https://pan.blackevil.cn/
         run: |
           npm ci
           npm run build -- --base=/
